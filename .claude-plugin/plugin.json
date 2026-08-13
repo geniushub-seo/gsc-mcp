@@ -2,7 +2,7 @@
   "name": "gsc-mcp",
   "displayName": "Google Search Console MCP",
   "version": "0.3.0",
-  "description": "Query Google Search Console from your AI agent. Single Go binary, no runtime to install. The only GSC MCP with regex query filters, so you can measure organic growth with branded searches excluded.",
+  "description": "Ask your AI agent about your site's Google Search traffic in plain language — clicks, keywords, indexing. One file to install, no Node or Python needed. Regex filters let you exclude your own brand name, so you can see how strangers actually find you.",
   "author": {
     "name": "geniushub-seo"
   },
