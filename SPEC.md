@@ -1,126 +1,146 @@
 # SPEC — gsc-mcp v1
 
-定稿技術規格。
+Final technical specification.
 
-## 1. 目標與非目標
+## 1. Goals and non-goals
 
-**目標**
+**Goals**
 
-- 單一原生 binary，執行端零 runtime 依賴
-- MCP stdio transport（stdin/stdout JSON-RPC）
-- Service Account 認證（多客戶代理商場景，不需 OAuth 瀏覽器流程）
-- 預設唯讀；寫入能力需顯式旗標
-- 業務邏輯與 transport 解耦，保留未來加 HTTP 的空間
+- One native binary with no runtime dependency for end users.
+- MCP stdio transport (JSON-RPC over stdin/stdout).
+- Service-account authentication for multi-client agencies, without an OAuth
+  browser flow.
+- Read-only by default; writes require explicit flags.
+- Transport-independent business logic so HTTP can be added later.
 
-**非目標（v1）**
+**Non-goals in v1**
 
-- HTTP / Streamable HTTP transport
-- 使用者互動式 OAuth 流程
-- `sites.add` / `sites.delete`
-- Indexing API
-- 官方 API 不存在的報告（涵蓋範圍、CWV、外部連結）
+- HTTP or Streamable HTTP transport.
+- Interactive user OAuth flow.
+- `sites.add` / `sites.delete`.
+- Indexing API.
+- Reports the official API does not expose: coverage, CWV, and external links.
 
-## 2. 官方 API 全貌
+## 2. Official API coverage
 
-| 服務群 | Method | v1 是否包成 tool |
+| Service | Method | Exposed as v1 tool |
 |---|---|---|
-| Search Analytics | `searchanalytics.query` | ✅ |
-| Sitemaps | `sitemaps.list` | ✅ |
-| Sitemaps | `sitemaps.get` | ✅ |
-| Sitemaps | `sitemaps.submit` | ✅（旗標） |
-| Sitemaps | `sitemaps.delete` | ✅（雙旗標） |
-| Sites | `sites.list` | ✅ |
-| Sites | `sites.get` | ✅ |
-| Sites | `sites.add` | ❌ |
-| Sites | `sites.delete` | ❌ |
-| URL Inspection | `urlInspection.index.inspect` | ✅ |
+| Search Analytics | `searchanalytics.query` | Yes |
+| Sitemaps | `sitemaps.list` | Yes |
+| Sitemaps | `sitemaps.get` | Yes |
+| Sitemaps | `sitemaps.submit` | Yes, flag-gated |
+| Sitemaps | `sitemaps.delete` | Yes, double-flag-gated |
+| Sites | `sites.list` | Yes |
+| Sites | `sites.get` | Yes |
+| Sites | `sites.add` | No |
+| Sites | `sites.delete` | No |
+| URL Inspection | `urlInspection.index.inspect` | Yes |
 
-**實作要點**：`urlInspection` 的 base URL 是 `searchconsole.googleapis.com/v1`，其餘是 `www.googleapis.com/webmasters/v3`。使用 `google.golang.org/api/searchconsole/v1` 時**這個差異由生成碼處理**，不需自己拼 URL。
+**Implementation detail:** `urlInspection` uses
+`searchconsole.googleapis.com/v1`; the other services use
+`www.googleapis.com/webmasters/v3`. The generated
+`google.golang.org/api/searchconsole/v1` client handles this distinction; do not
+build URLs manually.
 
-## 3. Tool 規格
+## 3. Tool specification
 
-### 3.0 六支 tool 的共用行為
+### 3.0 Shared behaviour for all six tools
 
-#### `site_url` 正規化
+#### `site_url` normalization
 
-所有帶 `site_url` 的 tool 先跑 `NormalizeSiteURL`：
+Every tool with `site_url` calls `NormalizeSiteURL` first:
 
-| 輸入 | 輸出 | 依據 |
+| Input | Output | Reason |
 |---|---|---|
-| `sc-domain:example.com` | 原樣 | 已是標準格式 |
-| `example.com` | `sc-domain:example.com` | 裸網域推定 Domain property |
-| `https://example.com` | `sc-domain:example.com` | 根 URL 無尾斜線 → 推定 Domain |
-| `https://example.com/` | `https://example.com/` | **尾斜線 = 呼叫端明示 URL-prefix 意圖** |
-| `https://example.com/blog` | `https://example.com/blog/` | 非根路徑 → URL-prefix，補尾斜線 |
+| `sc-domain:example.com` | unchanged | Already canonical. |
+| `example.com` | `sc-domain:example.com` | A bare domain implies a Domain property. |
+| `https://example.com` | `sc-domain:example.com` | A root URL without trailing slash implies a Domain property. |
+| `https://example.com/` | `https://example.com/` | A trailing slash explicitly signals URL-prefix intent. |
+| `https://example.com/blog` | `https://example.com/blog/` | A non-root path is URL-prefix; add trailing slash. |
 
-`www.` 前綴與 port 在推導 apex 時剝除。
+Remove `www.` and ports while deriving the apex domain.
 
-#### 403 property 探索救援
+#### 403 property-discovery recovery
 
-正規化後的呼叫回 **403**（僅 403，其他錯誤直接往上拋）時：
+When the normalized request receives **403 only** (all other errors propagate):
 
-1. 呼叫 `sites.list`
-2. 用輸入的 apex domain 比對，在**尚未 403 失敗的候選**裡偏好 `sc-domain:` > URL-prefix
-3. 排除步驟 1 剛失敗的那個 URL（`ResolveSiteURL` 的 `exclude`），找到就用解析結果重試一次
-4. 找不到則回 `permission_denied`，**訊息中列出所有可存取的 property**
+1. Call `sites.list`.
+2. Match the input apex domain and prefer `sc-domain:` over URL-prefix among
+   candidates that have not failed with 403.
+3. Exclude the URL that just failed (`ResolveSiteURL`'s `exclude`) and retry
+   once with the resolved property when one exists.
+4. Otherwise return `permission_denied` and list every accessible property in
+   the message.
 
-同一 apex 下若 `sc-domain:` 無權限而 URL-prefix 有權限，救援必須落到後者，不得再挑回剛 403 的那支。
+When a same-apex `sc-domain:` property lacks permission but a URL-prefix
+property works, recovery must select the URL-prefix property rather than retry
+the known-failing property.
 
-用泛型包裝器 `WithResolvedSiteURL[T]` 實作，六支共用一條路徑，不逐支重寫。
+Implement this with generic `WithResolvedSiteURL[T]`; all six tools share the
+same path.
 
-#### Stringified array 參數修復
+#### Stringified array argument repair
 
-以 `srv.AddReceivingMiddleware` 在 SDK schema 驗證**之前**修復 client 把陣列編碼成字串的 bug。維護表：
+Use `srv.AddReceivingMiddleware` before SDK schema validation to repair clients
+that encode arrays as strings. Maintain this map:
 
-| Tool | 欄位 |
+| Tool | Fields |
 |---|---|
-| `query_search_analytics` | `dimensions`、`dimension_filter_groups` |
+| `query_search_analytics` | `dimensions`, `dimension_filter_groups` |
 | `compare_periods` | `dimensions` |
 | `inspect_url` | `urls` |
 
-判斷保守：僅當值是 JSON 字串**且**該字串本身可解析成 JSON 陣列時才改寫，其餘放行給正常驗證。
+Only rewrite a value if it is a JSON string whose own contents parse as a JSON
+array. Let normal validation handle every other value.
 
-#### 共用輸出欄位
+#### Shared output fields
 
-每支 tool 的成功輸出都含 `queried_at`（UTC RFC3339），以及實際送出的 `site_url`（正規化或救援後的值，不是使用者原始輸入）。
+Every successful tool output includes `queried_at` in UTC RFC3339 and the
+actual `site_url` sent after normalization or recovery, not the user's raw
+input.
 
 ### 3.1 `query_search_analytics`
 
 `POST searchAnalytics/query`
 
-| 參數 | 型別 | 必填 | 預設 | 備註 |
+| Parameter | Type | Required | Default | Notes |
 |---|---|---|---|---|
-| `site_url` | string | ✅ | — | 支援 `sc-domain:` |
-| `start_date` / `end_date` | string | ✅ | — | `YYYY-MM-DD`，PT 時區 |
-| `dimensions` | string[] | — | `[]` | `query` `page` `country` `device` `date` `hour` `searchAppearance` |
-| `search_type` | string | — | `web` | `web` `image` `video` `news` `discover` `googleNews` |
-| `dimension_filter_groups` | object[] | — | — | 完整透傳；operator 見下 |
-| `aggregation_type` | string | — | `auto` | `auto` `byProperty` `byPage` `byNewsShowcasePanel` |
-| `row_limit` | int | — | `150` | **1–25,000**；匯出請顯式指定 |
-| `start_row` | int | — | `0` | 分頁 offset |
-| `data_state` | string | — | **`all`** | `all` `final` `hourly_all` |
+| `site_url` | string | Yes | — | Supports `sc-domain:`. |
+| `start_date` / `end_date` | string | Yes | — | `YYYY-MM-DD`, Pacific Time. |
+| `dimensions` | string[] | No | `[]` | `query`, `page`, `country`, `device`, `date`, `hour`, `searchAppearance`. |
+| `search_type` | string | No | `web` | `web`, `image`, `video`, `news`, `discover`, `googleNews`. |
+| `dimension_filter_groups` | object[] | No | — | Full pass-through; operators below. |
+| `aggregation_type` | string | No | `auto` | `auto`, `byProperty`, `byPage`, `byNewsShowcasePanel`. |
+| `row_limit` | int | No | `150` | **1–25,000**; state it explicitly for exports. |
+| `start_row` | int | No | `0` | Pagination offset. |
+| `data_state` | string | No | **`all`** | `all`, `final`, `hourly_all`. |
 
-Filter operator：`equals` `notEquals` `contains` `notContains` `includingRegex` `excludingRegex`（RE2 語法）
+Filter operators: `equals`, `notEquals`, `contains`, `notContains`,
+`includingRegex`, `excludingRegex` (RE2 syntax).
 
-**約束（必須在 handler 驗證，不能只靠 Google 回錯）**
+**Constraints validated by the handler, not delegated to Google:**
 
-- `row_limit` 超過 25,000 → `invalid_input`
-- `dimensions` 含 `hour` 但 `data_state != hourly_all` → `invalid_input`，訊息說明 HOUR 需要 HOURLY_ALL 且只有近 10 天資料
-- filter 的 `dimension` 只允許 `query` `page` `country` `device` `searchAppearance`；填 `date` 或 `hour` → `invalid_input`
-- group 或 filter 了 `page` 時，`aggregation_type` 不得為 `byProperty` → `invalid_input`
-- `start_date > end_date` → `invalid_input`
+- `row_limit` above 25,000 returns `invalid_input`.
+- `hour` in `dimensions` without `data_state=hourly_all` returns
+  `invalid_input`, explaining the 10-day HOUR limit.
+- A filter `dimension` must be `query`, `page`, `country`, `device`, or
+  `searchAppearance`; `date` and `hour` return `invalid_input`.
+- Grouping or filtering by `page` forbids `aggregation_type=byProperty`.
+- `start_date > end_date` returns `invalid_input`.
 
-**`data_state` 預設為 `all` 的理由**：對齊 GSC 後台顯示，避免代理商交付報表時被客戶質疑「數字跟後台對不上」。要嚴謹分析時 LLM 可顯式指定 `final`。
+`data_state` defaults to `all` to match the GSC UI and avoid reports that users
+cannot reconcile with it. The LLM can explicitly choose `final` for a strict
+analysis.
 
-**Description 必寫**
+**The description must state:**
 
-- 日期為 PT 時區、資料有 2–4 天延遲、僅保留 16 個月
-- API 只回 top rows，不保證完整；各列總和不等於後台總計
-- `row_limit` 上限 25,000（後台介面一次只給 1,000）
-- 平均排名是加權平均，非「該字排第幾」的事實
-- 非品牌詞分析範例：用 `excludingRegex` 排除品牌詞
+- Dates use Pacific Time; data lags 2–4 days and is retained for 16 months.
+- The API returns top rows only; sums are not guaranteed to match UI totals.
+- `row_limit` is at most 25,000 (the UI gives 1,000 per page).
+- Average position is a weighted average, not a literal ranking for a query.
+- Non-brand example: `excludingRegex` for brand terms.
 
-**輸出**
+**Output example**
 
 ```json
 {
@@ -130,202 +150,239 @@ Filter operator：`equals` `notEquals` `contains` `notContains` `includingRegex`
   "dimensions": ["query", "page"],
   "row_count": 842,
   "rows": [
-    { "keys": ["關鍵字", "https://example.com/page/"], "clicks": 42, "impressions": 1200, "ctr": 0.035, "position": 8.4 }
+    { "keys": ["keyword", "https://example.com/page/"], "clicks": 42, "impressions": 1200, "ctr": 0.035, "position": 8.4 }
   ]
 }
 ```
 
 ### 3.2 `compare_periods`
 
-Server 端封裝，內部呼叫兩次 `searchanalytics.query`。非官方 API。
+A server-side wrapper that calls `searchanalytics.query` twice; it is not an
+official Google API.
 
-參數：`site_url`、`period_a_start`、`period_a_end`、`period_b_start`、`period_b_end`、`dimensions`、`search_type`、`row_limit`（預設 100）、`data_state`
+Arguments: `site_url`, `period_a_start`, `period_a_end`, `period_b_start`,
+`period_b_end`, `dimensions`, `search_type`, `row_limit` (default 100), and
+`data_state`.
 
-輸出每列含：A 期與 B 期的 clicks / impressions / ctr / position，以及各自的絕對差與百分比差。只出現在單一期間的 key 也要列出（另一期補 0，並標記 `only_in`）。
+Each row includes A/B clicks, impressions, CTR, and position plus absolute and
+percentage deltas. Keys in only one period are retained with zero for the other
+period and `only_in` set.
 
-理由：SEO 月報最高頻需求。讓 LLM 呼叫兩次再自己心算，token 貴且算錯機率高。
+This exists because SEO reporting is frequent: asking an LLM to call twice and
+calculate locally is token-expensive and error-prone.
 
 ### 3.3 `inspect_url`
 
 `POST urlInspection/index:inspect`
 
-| 參數 | 型別 | 必填 | 預設 |
+| Parameter | Type | Required | Default |
 |---|---|---|---|
-| `site_url` | string | ✅ | — |
-| `urls` | string[] | ✅ | — |
-| `language_code` | string | — | `zh-TW` |
+| `site_url` | string | Yes | — |
+| `urls` | string[] | Yes | — |
+| `language_code` | string | No | `zh-TW` |
 
-`urls` 長度 1–10。server 內部**序列**呼叫，間隔 ≥100ms，不併發。
+`urls` has length 1–10. Calls are **serial**, at least 100 ms apart; do not
+parallelize them.
 
-回傳精簡欄位（原始 response 很肥，不要整包丟給 LLM）。已從 `searchconsole-gen.go` 逐欄驗證：
+Return a compact result rather than the large raw response. From the generated
+client, `UrlInspectionResult` has `indexStatusResult`,
+`inspectionResultLink`, `mobileUsabilityResult`, `richResultsResult`, and
+`ampResult`. The final three are optional and may be omitted by Google, so they
+must be nil-checked.
 
-`UrlInspectionResult` 頂層有 `indexStatusResult`、`inspectionResultLink`、`mobileUsabilityResult`、`richResultsResult`、`ampResult`——**後三者是 optional 指標，Google 對不適用的 URL 直接省略，取值前必須判 nil**。
+Keep all `IndexStatusInspectionResult` fields: `verdict`, `coverageState`,
+`indexingState`, `crawledAs`, `lastCrawlTime`, `pageFetchState`,
+`robotsTxtState`, `googleCanonical`, `userCanonical`, `referringUrls[]`, and
+`sitemap[]`. Add `inspectionResultLink` and verdict summaries for the three
+optional sections. Do not return detailed `richResultsResult.detectedItems`.
 
-`IndexStatusInspectionResult` 全欄位：`verdict`、`coverageState`、`indexingState`、`crawledAs`、`lastCrawlTime`、`pageFetchState`、`robotsTxtState`、`googleCanonical`、`userCanonical`、`referringUrls[]`、`sitemap[]`。
-
-全部保留（這層本來就精簡），另加 `inspectionResultLink` 與三個 optional 區塊的 `verdict` 摘要。不回傳 `richResultsResult.detectedItems` 的完整明細。
-
-Description 必寫：**不要寫死配額數字**，改連結官方 limits 頁（數字會變，寫死會過期）。並用「它不做什麼」列舉法：不測試線上版本、不請求索引、不列舉全站已索引 URL、不等同後台的網頁索引狀態報告。
+The description links to the official limits page rather than hard-coding quota
+numbers. It explicitly excludes live-page testing, indexing requests, all-site
+indexed-URL enumeration, and equivalence to the UI indexing report.
 
 ### 3.4 `list_sites`
 
-`GET sites`。無參數。回傳 `siteUrl` + `permissionLevel` 清單。多客戶入口 tool，description 要引導 LLM「不確定 property 格式時先呼叫這支」。
+`GET sites`. No arguments. Return `siteUrl` and `permissionLevel`. It is the
+multi-client entry tool; the description directs an LLM to use it first when
+property format is uncertain.
 
-**InputSchema 必須顯式寫死**，不能讓 SDK 從 `struct{}` 推導：
+**Its InputSchema must be explicit**, never inferred from `struct{}`:
 
 ```go
 var listSitesInputSchema = json.RawMessage(
     `{"type":"object","properties":{},"required":[],"additionalProperties":false}`)
 ```
 
-推導出的 schema 缺 `properties` / `required` / `additionalProperties`，嚴格 client（Copilot CLI）會拒絕整個 tool list，導致**所有** tool 不可用。
+The inferred schema omits `properties`, `required`, and
+`additionalProperties`. Strict clients such as Copilot CLI then reject the full
+tool list, making every tool unavailable.
 
 ### 3.5 `get_site`
 
-`GET sites/{siteUrl}`。參數 `site_url`。回傳 `permissionLevel`。
+`GET sites/{siteUrl}`. Takes `site_url`; returns `permissionLevel`.
 
 ### 3.6 `manage_sitemaps`
 
-四支合併。
+One tool for four actions.
 
-| 參數 | 型別 | 必填 | 說明 |
+| Parameter | Type | Required | Notes |
 |---|---|---|---|
-| `site_url` | string | ✅ | |
-| `action` | string | ✅ | `list` / `get` / `submit` / `delete` |
-| `feedpath` | string | 條件 | `get` / `submit` / `delete` 必填 |
-| `sitemap_index` | string | — | 僅 `list` 使用 |
+| `site_url` | string | Yes | |
+| `action` | string | Yes | `list` / `get` / `submit` / `delete` |
+| `feedpath` | string | Conditional | Required for `get` / `submit` / `delete`. |
+| `sitemap_index` | string | No | Used only by `list`. |
 
-`list` / `get` 回傳：`path`、`lastSubmitted`、`lastDownloaded`、`isPending`、`isSitemapsIndex`、`warnings`、`errors`、`contents[]`
+`list` / `get` return `path`, `lastSubmitted`, `lastDownloaded`, `isPending`,
+`isSitemapsIndex`, `warnings`, `errors`, and `contents[]`.
 
-旗標檢查在**進 API 之前**做，回 `write_disabled` 並在 message 說明要設哪個環境變數。
+Check flags **before** calling the API. Return `write_disabled` and state the
+missing environment variable in the message.
 
-## 4. 認證
+## 4. Authentication
 
-**分發模式：使用者自備憑證。** 不做集中式 OAuth app（我方持有 OAuth client、使用者只需登入）。理由：External 發布需通過 Google 驗證審核（隱私權政策、首頁、網域所有權、示範影片、數週等待），Testing 模式則要手動維護測試者名單且 refresh token 7 天過期——兩者都與「零維護分發」相衝。
+**Distribution model: users bring their own credentials.** This project does
+not run a centralized OAuth app. External Google verification would require a
+privacy policy, homepage, domain verification, demo video, and weeks of review;
+testing mode requires a maintained tester list and refresh tokens expire after
+seven days. Neither fits zero-maintenance distribution.
 
-「自備憑證」有**兩種**形態，兩者都要支援。
+Two credential forms are both supported.
 
-### 4.1 兩種憑證型別
+### 4.1 Credential types
 
-| | `authorized_user`（ADC） | `service_account` |
+| | `authorized_user` (ADC) | `service_account` |
 |---|---|---|
-| 定位 | **主推**，文件放前面 | 進階，文件放後面 |
-| 適用 | 一般使用者、個人分析 | headless / CI、需要非人類身分、未來的 HTTP transport |
-| 身分 | 使用者自己的 Google 帳號 | 專用的機器帳號 |
-| 取得方式 | `gcloud auth application-default login --scopes=...` 跳瀏覽器登入 | GCP console 建帳號 + 下載 JSON key |
-| **加進 GSC property** | **不需要**——帳號本來就有權限的 property 全部看得到 | 每個 property 逐一把 `client_email` 加為使用者 |
-| 前置安裝 | 需要 gcloud CLI（一次） | 無 |
-| 憑證壽命 | refresh token 可能因改密碼／久未使用／組織政策失效 | key 不過期 |
-| 綁定風險 | 綁在一個人的帳號上，該帳號異動即全斷 | 無 |
+| Positioning | **Recommended**, documented first | Advanced, documented later |
+| Use case | General users and personal analysis | Headless / CI, non-human identity, future HTTP transport |
+| Identity | The user's own Google account | Dedicated machine account |
+| Acquisition | Browser login through `gcloud auth application-default login --scopes=...` | Create account in GCP Console and download JSON key |
+| Add to GSC property | **No**; it already sees the user's permitted properties | Add `client_email` to every property |
+| Prerequisite | gcloud CLI, once | None |
+| Credential life | Refresh token can expire after password changes, inactivity, or policy | Key does not expire |
+| Coupling risk | One person's account change can stop everything | None |
 
-ADC 免掉「把 email 加進每個 property」這一步，那是 service account 路徑最痛的部分。這也是它成為主推的唯一理由。
+ADC removes the painful step of adding an email address to every property. That
+is the only reason it is the recommended route.
 
-### 4.2 憑證優先序
+### 4.2 Credential precedence
 
-| # | 來源 | 說明 |
+| # | Source | Notes |
 |---|---|---|
-| 1 | CLI `--credentials-file` | 明示指定，最高優先。保留 `--service-account-file` 為別名以相容既有設定 |
-| 2 | `GOOGLE_APPLICATION_CREDENTIALS` | Google 官方標準的 ADC 環境變數名 |
-| 3 | `GOOGLE_SERVICE_ACCOUNT_FILE` | 本專案原有名稱，維持相容 |
-| 4 | `GOOGLE_SERVICE_ACCOUNT_JSON` | inline JSON，給容器與 CI |
-| 5 | `.env` 檔 | 開發便利，讀上述任一變數名 |
-| 6 | **ADC 預設路徑** | `$HOME/.config/gcloud/application_default_credentials.json`（Windows 為 `%APPDATA%\gcloud\...`）。**這一層讓 ADC 使用者完全不必設任何環境變數** |
+| 1 | CLI `--credentials-file` | Explicit and highest priority. Keep `--service-account-file` as a compatibility alias. |
+| 2 | `GOOGLE_APPLICATION_CREDENTIALS` | Google's standard ADC environment-variable name. |
+| 3 | `GOOGLE_SERVICE_ACCOUNT_FILE` | Existing project name, retained for compatibility. |
+| 4 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Inline JSON for containers and CI. |
+| 5 | `.env` file | Development convenience; reads any source variable above. |
+| 6 | **Default ADC path** | `$HOME/.config/gcloud/application_default_credentials.json` (Windows: `%APPDATA%\gcloud\...`). ADC therefore needs no environment variable. |
 
-第 6 層是「零設定」的關鍵：跑完 `gcloud auth application-default login` 之後，MCP 設定檔只需要 `command`，不需要 `env` 區塊。
+After `gcloud auth application-default login`, an MCP config needs only
+`command`, without an `env` block.
 
-### 4.3 型別分派
+### 4.3 Type dispatch
 
-從憑證 JSON 讀 `type` 欄位分派，不要寫死：
+Read `type` from credential JSON; never hard-code a type:
 
-| `type` 值 | 傳入的 `option.CredentialsType` |
+| `type` | `option.CredentialsType` |
 |---|---|
 | `service_account` | `option.ServiceAccount` |
 | `authorized_user` | `option.AuthorizedUser` |
-| 其他 | 回明確錯誤，列出支援的兩種 |
+| Other | Return a clear error listing both supported types. |
 
-用 `option.WithAuthCredentialsJSON(credType, json)`。**不要用已 deprecated 的 `option.WithCredentialsJSON`**（官方標註 security risk）。
+Use `option.WithAuthCredentialsJSON(credType, json)`. Do **not** use deprecated
+`option.WithCredentialsJSON`, which is marked as a security risk.
 
 ### 4.4 `quota_project_id`
 
-ADC 使用者憑證**沒有隱含的配額專案**，少了它 Google 會拒絕請求。憑證 JSON 若含 `quota_project_id`，必須傳 `option.WithQuotaProject(id)`。
+ADC credentials have no implicit quota project. If credential JSON contains
+`quota_project_id`, pass `option.WithQuotaProject(id)` or Google rejects the
+request. Service-account credentials already carry a project.
 
-`service_account` 憑證自帶專案，不需要這個。
+### 4.5 Scopes differ by credential type
 
-### 4.5 Scope：兩種型別行為不同
-
-| 條件 | `service_account` | `authorized_user`（ADC） |
+| Condition | `service_account` | `authorized_user` (ADC) |
 |---|---|---|
-| 預設 | `webmasters.readonly` | 登入時決定 |
-| `GSC_ENABLE_WRITE=true` | 升級為 `webmasters` | **無效**——見下 |
+| Default | `webmasters.readonly` | Set at login time |
+| `GSC_ENABLE_WRITE=true` | Upgrade to `webmasters` | **No effect**; see below |
 
-**ADC 的 scope 在 `gcloud auth application-default login` 當下就固定在 refresh token 上。** OAuth 的 refresh grant 不允許擴大 scope，所以事後傳 `option.WithScopes` 加不上去。
+ADC scopes are fixed into the refresh token by `gcloud auth
+application-default login`. Refresh grants cannot expand scopes, so a later
+`option.WithScopes` call cannot enable writes.
 
-這會製造一個**靜默失效的旗標**：ADC 使用者設 `GSC_ENABLE_WRITE=true`，程式以為開了寫入，Google 卻回 403。這類「解析了但沒接上」的旗標必須處理：
+This creates a silent dead flag unless addressed. With ADC plus
+`GSC_ENABLE_WRITE=true`, write a `slog.Warn` at startup explaining that scopes
+are determined at login and the user must log in again with
+`https://www.googleapis.com/auth/webmasters`. Document this in `README.md` and
+`INSTALL.md`, and test that the warning occurs.
 
-- ADC 模式下若 `GSC_ENABLE_WRITE=true`，啟動時發 `slog.Warn`，說明 ADC 的 scope 由登入決定，要寫入必須重跑登入並在 `--scopes` 帶上 `https://www.googleapis.com/auth/webmasters`
-- `README.md` 與 `INSTALL.md` 都要寫明這件事
-- 需要一條測試證明該警告會出現（`AGENTS.md`：新增設定項要有測試證明它真的改變行為）
-
-ADC 使用者要用讀取功能，登入時的 scope 至少要包含：
+ADC read access requires at least:
 
 ```
 https://www.googleapis.com/auth/webmasters.readonly
 ```
 
-### 4.6 其他
+### 4.6 Other authentication rules
 
-token 快取與 refresh 由 `golang.org/x/oauth2` 處理，**不要自己實作 JWT 簽章或 token 交換**。
+`golang.org/x/oauth2` manages token caching and refresh. Do **not** implement
+JWT signing or token exchange yourself.
 
-啟動時若憑證無效或找不到：往 stderr 印一則清楚錯誤（要指出檢查過哪些來源），non-zero 退出，不要進 MCP loop。
+When startup credentials are missing or invalid, print a clear stderr error
+listing the sources checked and exit non-zero; do not enter the MCP loop.
 
-## 5. 錯誤模型
+## 5. Error model
 
-工具層錯誤回 `mcp.CallToolResult{IsError: true}`，body 為下列 JSON，**不回 Go error**。
+Tool errors return `mcp.CallToolResult{IsError: true}` and this JSON body, **not
+a Go error**:
 
-- 回 Go error → 變成 protocol error，LLM 收到無法行動的東西
-- 回成功 result 但漏設 `IsError` → client 無法在協定層分辨成敗
+- A Go error becomes a protocol error that an LLM cannot act on.
+- A successful result without `IsError` prevents the client from distinguishing
+  failure at protocol level.
 
-Go error 只保留給「連 result 都組不出來」的情況。
+Reserve Go errors for cases where even a result cannot be constructed.
 
 ```json
 {
   "error": "<code>",
-  "message": "<人類可讀；上游訊息已 sanitize 且 ≤300 字元，本地 property 列表可完整列出>",
-  "suggestion": "<下一步該做什麼>"
+  "message": "<human-readable; upstream message sanitized and ≤300 characters, local property list may be complete>",
+  "suggestion": "<next action>"
 }
 ```
 
-上游 error body 只取 HTTP status 與 Google 的 `message` 欄位，不整包回傳——請求可能含客戶品牌詞（`dimension_filter_groups`）或客戶網址（`urls`）。
+For upstream errors, extract only HTTP status and Google's `message`; never
+return a full request/error body, which can include client brand terms in
+`dimension_filter_groups` or customer URLs in `urls`.
 
-| code | 觸發 |
+| Code | Trigger |
 |---|---|
-| `invalid_input` | 參數驗證失敗（含約束檢查） |
-| `auth_failed` | 401 |
-| `permission_denied` | 403，service account 未被加進該 property |
-| `not_found` | 404 |
-| `quota_exceeded` | 429（含退避重試後仍為 429） |
-| `upstream_error` | 5xx（含退避重試後仍為 5xx）或無法解析的回應 |
-| `write_disabled` | 旗標未開卻呼叫寫入 action |
+| `invalid_input` | Argument or constraint validation fails. |
+| `auth_failed` | 401. |
+| `permission_denied` | 403; for example, the service account lacks the property. |
+| `not_found` | 404. |
+| `quota_exceeded` | 429, including after retry/backoff is exhausted. |
+| `upstream_error` | 5xx, including after retry/backoff is exhausted, or an unparsable response. |
+| `write_disabled` | A write action is requested without required flags. |
 
-## 6. v2 候選（v1 穩定後再做）
+## 6. v2 candidates, only after v1 is stable
 
-以下都是本地運算編排，不是新的 Google API：
+These are local computation orchestration, not new Google APIs:
 
-| Tool | 用途 |
+| Tool | Purpose |
 |---|---|
-| `find_ctr_opportunities` | 高曝光、排名 4–15、CTR 低於同位置 baseline 的機會 |
-| `find_content_decay` | 兩期之間點擊/曝光衰退的頁面 |
-| `find_keyword_cannibalization` | 同一 query 被多頁承接且曝光重疊顯著 |
-| `find_low_hanging_keywords` | 接近第一頁、曝光量足夠的字 |
-| `get_page_query_matrix` | query × page 矩陣 |
+| `find_ctr_opportunities` | High-impression queries ranked 4–15 whose CTR is below a position baseline. |
+| `find_content_decay` | Pages with click/impression decline between two periods. |
+| `find_keyword_cannibalization` | Queries served by several pages with substantial overlapping impressions. |
+| `find_low_hanging_keywords` | Queries near page one with sufficient impressions. |
+| `get_page_query_matrix` | Query × page matrix. |
 
-這些 tool 必須：在輸出 metadata 說明評分公式與假設；附上支撐建議的原始或彙總列；不得把 GSC 平均排名當成逐字排名事實；計算需可用 fixture 決定性測試。
+Such tools must document their scoring formula and assumptions in output
+metadata, include the raw or summarized rows supporting a recommendation, never
+misstate average position as literal query rank, and have deterministic
+fixture-based tests.
 
-## 7. 官方文件索引
+## 7. Official-document index
 
-- API Reference：`developers.google.com/webmaster-tools/v1/api_reference_index`
-- searchAnalytics.query：`developers.google.com/webmaster-tools/v1/searchanalytics/query`
-- 配額：`developers.google.com/webmaster-tools/limits`
-- urlInspection.index.inspect：`developers.google.com/webmaster-tools/v1/urlInspection.index/inspect`
-- Go client 參考：`pkg.go.dev/google.golang.org/api/searchconsole/v1`
-- MCP Go SDK：`pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp`
+- API reference: `developers.google.com/webmaster-tools/v1/api_reference_index`
+- `searchAnalytics.query`: `developers.google.com/webmaster-tools/v1/searchanalytics/query`
+- Limits: `developers.google.com/webmaster-tools/limits`
+- `urlInspection.index.inspect`: `developers.google.com/webmaster-tools/v1/urlInspection.index/inspect`
+- Go client: `pkg.go.dev/google.golang.org/api/searchconsole/v1`
+- MCP Go SDK: `pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp`
