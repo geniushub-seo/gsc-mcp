@@ -177,7 +177,6 @@ go test ./... && go vet ./... && golangci-lint run
 
 - [INSTALL.md](INSTALL.md) — installation guide written for an AI agent to follow
 - [SPEC.md](SPEC.md) — the frozen technical spec
-- [docs/blog-gsc-mcp.md](docs/blog-gsc-mcp.md) — a plain-language walkthrough of installing and using it (Traditional Chinese)
 
 ---
 

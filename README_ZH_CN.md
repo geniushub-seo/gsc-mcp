@@ -177,7 +177,6 @@ go test ./... && go vet ./... && golangci-lint run
 
 - [INSTALL.md](INSTALL.md) — 写给 AI agent 照着执行的安装指引
 - [SPEC.md](SPEC.md) — 定稿的技术规格
-- [docs/blog-gsc-mcp.md](docs/blog-gsc-mcp.md) — 安装与使用场景的通俗导览（繁体中文）
 
 ---
 

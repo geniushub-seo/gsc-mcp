@@ -260,7 +260,7 @@ ADC 使用者憑證**沒有隱含的配額專案**，少了它 Google 會拒絕�
 
 **ADC 的 scope 在 `gcloud auth application-default login` 當下就固定在 refresh token 上。** OAuth 的 refresh grant 不允許擴大 scope，所以事後傳 `option.WithScopes` 加不上去。
 
-這會製造一個**靜默失效的旗標**：ADC 使用者設 `GSC_ENABLE_WRITE=true`，程式以為開了寫入，Google 卻回 403。這與 R1 的 `RequestTimeout` 死旗標、R3 的 `searchType` 靜默失效是同一類問題，必須處理：
+這會製造一個**靜默失效的旗標**：ADC 使用者設 `GSC_ENABLE_WRITE=true`，程式以為開了寫入，Google 卻回 403。處置：
 
 - ADC 模式下若 `GSC_ENABLE_WRITE=true`，啟動時發 `slog.Warn`，說明 ADC 的 scope 由登入決定，要寫入必須重跑登入並在 `--scopes` 帶上 `https://www.googleapis.com/auth/webmasters`
 - `README.md` 與 `INSTALL.md` 都要寫明這件事
@@ -307,45 +307,7 @@ Go error 只保留給「連 result 都組不出來」的情況。
 | `upstream_error` | 5xx 或無法解析的回應 |
 | `write_disabled` | 旗標未開卻呼叫寫入 action |
 
-## 6. 規模基準
-
-本節只保留規格層面的估算基準。
-
-### 人工閘（不計輪數，建議現在就做完）
-
-建 GCP 專案 → 啟用 Search Console API → 建 service account 並下載 key → 把 email 加進至少一個真實 property。約五分鐘，步驟見 `README.md`「開始使用」。
-
-驗收標準 2、3、4 全部卡在這裡；第 1–2 輪就需要真實憑證來抓契約 fixture。
-
-**這同時是每個使用者的一次性設定**——本專案採「使用者自備憑證」的分發模式（與參考實作相同），不做集中式 OAuth app。因此 `README.md` 的三步驟說明是**產品的一部分**，不是附屬文件：寫不清楚等於產品不能用。輪 8 的「README 對齊」要照著它實際跑一次驗證。
-
-### 規模基準
-
-參考實作（`../old-refence`，4 支 tool、參數不完整、無配額防護）實測：產品碼 1,349 行（含我們不做的 HTTP transport 253 行）、測試碼 2,123 行，**測試:產品約 1.6 : 1**。
-
-本專案是 6 支 tool、完整參數面、retry、配額計數、結構化錯誤、雙旗標，但改用 `google.golang.org/api/searchconsole/v1` 省掉參考實作 `client.go` 裡近 400 行 HTTP 拼裝：
-
-下表的估計欄是規劃時寫的，實測欄量於 2026-08-07、HEAD `ac53455`：
-
-| 區塊 | 原估計 | 實測 |
-|---|---|---|
-| `cmd/` + `internal/config` | ~230 | 428 |
-| `internal/mcpfix`（stringified args） | ~90 | 88 |
-| `internal/gscclient`（client / siteurl / retry / quota / errors / models） | ~720 | 588 |
-| `internal/tools`（6 支 handler + validate + register + description 常數） | ~980 | 1,575 |
-| `internal/setup`（`gsc-mcp setup`，規劃時不存在） | — | 365 |
-| **產品碼小計** | **~2,000** | **3,044** |
-| 測試（1.6× + 契約 fixture） | ~3,200 | 3,409 |
-| Makefile / `.golangci.yml` / CI workflow / `install.sh` | ~150 | 286 |
-| **總計** | **約 5,400 行** | **6,453** |
-
-產品碼超估 52%，主要在 `internal/tools`（description 常數與約束檢查比預期厚）與規劃時不存在的 `internal/setup`。測試:產品實際為 1.12 : 1，低於參考實作的 1.6 : 1。
-
-`internal/tools/validate.go` 是單一最大檔，現況 372 行（規劃時估 ~180）。**若超過 400 行，拆成 `validate_enum.go` 與 `validate_constraints.go`。** 原本寫 250 行，該線在無人察覺的情況下早已跨過——門檻要維持在跨線時真的會被注意到的位置，否則等於沒有門檻。
-
-**人工閘**（不計入 session 輪數）：建立 GCP 專案、啟用 API、把 service account 加進真實 property——這些要使用者自己在 Google 介面做完才能跑端到端驗證。
-
-## 7. v2 候選（v1 穩定後再做）
+## 6. v2 候選（v1 穩定後再做）
 
 以下都是本地運算編排，不是新的 Google API：
 
@@ -359,7 +321,7 @@ Go error 只保留給「連 result 都組不出來」的情況。
 
 這些 tool 必須：在輸出 metadata 說明評分公式與假設；附上支撐建議的原始或彙總列；不得把 GSC 平均排名當成逐字排名事實；計算需可用 fixture 決定性測試。
 
-## 8. 官方文件索引
+## 7. 官方文件索引
 
 - API Reference：`developers.google.com/webmaster-tools/v1/api_reference_index`
 - searchAnalytics.query：`developers.google.com/webmaster-tools/v1/searchanalytics/query`
