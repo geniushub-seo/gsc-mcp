@@ -7,7 +7,7 @@
 [![ci](https://github.com/geniushub-seo/gsc-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/geniushub-seo/gsc-mcp/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/geniushub-seo/gsc-mcp)](https://github.com/geniushub-seo/gsc-mcp/releases)
 
-[English](README.md) | 繁體中文
+[English](README.md) | 繁體中文 | [简体中文](README_ZH_CN.md)
 
 </div>
 
