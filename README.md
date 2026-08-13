@@ -183,6 +183,6 @@ go test ./... && go vet ./... && golangci-lint run
 
 <div align="center">
 
-Built by **[Genius Hub](https://geniushub.cc/)** · Licensed under [MIT](LICENSE)
+Built by **[Genius Hub](https://geniushub.cc/)** · Licensed under MIT
 
 </div>

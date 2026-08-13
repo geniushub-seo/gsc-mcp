@@ -183,6 +183,6 @@ go test ./... && go vet ./... && golangci-lint run
 
 <div align="center">
 
-由 **[萬智匯 Genius Hub](https://geniushub.cc/)** 開發 · 採 [MIT](LICENSE) 授權
+由 **[萬智匯 Genius Hub](https://geniushub.cc/)** 開發 · 採 MIT 授權
 
 </div>
