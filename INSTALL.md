@@ -68,7 +68,7 @@ gsc-mcp setup
 
 ## 步驟 0：先問使用者
 
-1. 要用哪個 AI 工具？（Claude Desktop / Claude Code / Cursor / VS Code）
+1. 要用哪個 AI 工具？（Claude Desktop / Claude Code / Codex / Cursor / Hermes / VS Code）
 2. 機器上有沒有 gcloud？（`which gcloud`）
 3. 是否已跑過 `gcloud auth application-default login`？
 
@@ -275,7 +275,24 @@ claude mcp add --transport stdio gsc -- /Users/使用者名稱/bin/gsc-mcp
 
 ### Cursor
 
-`~/.cursor/mcp.json`，格式同 Desktop。
+開啟本 repo 時，Cursor 會讀 `.cursor/mcp.json`，不用另建設定。若要在其他專案全域使用，合併同一個 `gsc` 片段到 `~/.cursor/mcp.json`。
+
+### Codex
+
+開啟本 repo 時，Codex 會讀根目錄 `AGENTS.md` 和 `.agents/skills/`。MCP server 請用 Codex 的 MCP 設定加入同一個 `gsc` 片段；不要將憑證放入 repo 的 `.codex/`。
+
+### Hermes
+
+Hermes 沒有 repo-local MCP discovery；將下面片段**合併**到 `~/.hermes/config.yaml` 的 `mcp_servers`，不要覆寫你原有的 servers：
+
+```yaml
+mcp_servers:
+  gsc:
+    command: gsc-mcp
+    supports_parallel_tool_calls: false
+```
+
+ADC 不需要 `env` 區塊。重啟 Hermes 後，先叫它呼叫 `list_sites`。
 
 ### VS Code + Copilot
 

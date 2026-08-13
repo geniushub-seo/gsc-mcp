@@ -1,7 +1,7 @@
 {
   "name": "gsc-mcp",
   "displayName": "Google Search Console MCP",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Ask your AI agent about your site's Google Search traffic in plain language — clicks, keywords, indexing. One file to install, no Node or Python needed. Regex filters let you exclude your own brand name, so you can see how strangers actually find you.",
   "author": {
     "name": "geniushub-seo"
@@ -9,6 +9,6 @@
   "license": "MIT",
   "repository": "https://github.com/geniushub-seo/gsc-mcp",
   "keywords": ["seo", "google-search-console", "gsc", "mcp", "search-analytics", "indexing"],
-  "skills": "./skills/",
+  "skills": "./.agents/skills/",
   "mcpServers": "./.mcp.json"
 }

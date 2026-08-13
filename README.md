@@ -11,7 +11,7 @@ English | [繁體中文](README_ZH_TW.md) | [简体中文](README_ZH_CN.md)
 
 </div>
 
-Built for SEO and content teams. Sign in once with your own Google account (ADC), and your local agent — Claude Code, Codex, Cursor — can query the Search Console data you already have access to. You do **not** need to add a service account to every property.
+Built for SEO and content teams. Sign in once with your own Google account (ADC), and your local agent — Claude Code, Codex, Cursor, or Hermes — can query the Search Console data you already have access to. You do **not** need to add a service account to every property.
 
 ## Install
 
@@ -139,6 +139,19 @@ mkdir -p ~/.config/gsc-mcp && chmod 700 ~/.config/gsc-mcp
 chmod 600 ~/.config/gsc-mcp/service-account.json
 ```
 
+## Agent-native onboarding
+
+Clone the repo when you want an agent to get its own project configuration and guidance. No config here contains credentials or an absolute path.
+
+| Agent | Native repo files | What to do |
+|---|---|---|
+| Claude Code | `.mcp.json`, `.claude-plugin/`, `.agents/skills/` | Open the repo or install the plugin. |
+| Codex | `AGENTS.md`, `.agents/skills/` | Start Codex from the repo root. |
+| Cursor | `.cursor/mcp.json`, `.cursor/rules/gsc-mcp.mdc` | Open the repo as a project. |
+| Hermes | no repo-local discovery | Merge the short `mcp_servers.gsc` entry in [INSTALL.md](INSTALL.md) into `~/.hermes/config.yaml`. |
+
+For every client, run `gsc-mcp doctor`, then ask the agent to call `list_sites`. Never put an OAuth token or service-account key in these files.
+
 ## Skills (analyses that work out of the box)
 
 Four skills ship with the server, so you don't have to invent the prompt yourself:
@@ -150,7 +163,7 @@ Four skills ship with the server, so you don't have to invent the prompt yoursel
 | `index-health` | "Has Google seen my new pages yet?" | Sitemap status, per-URL diagnosis, and canonical-conflict detection |
 | `gsc-recipes` | Anything else | A parameter routing table: question → the exact tool call |
 
-Claude Code loads `skills/` automatically. Other clients can use the contents of each `SKILL.md` as a prompt.
+Claude Code's plugin and Codex discover the shared skills in `.agents/skills/`. Cursor receives the same safe defaults from its project rule; its agent can read a `SKILL.md` when a specific analysis is requested.
 
 ## Tools
 

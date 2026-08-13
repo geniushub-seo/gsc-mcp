@@ -119,7 +119,7 @@ gsc-mcp doctor
 
 ### 現成的 skills
 
-`skills/` 底下有四個，不用自己想 prompt：
+`.agents/skills/` 底下有四個，不用自己想 prompt：
 
 | Skill | 使用者會怎麼問 |
 |---|---|
@@ -127,6 +127,19 @@ gsc-mcp doctor
 | `monthly-report` | 「這個月網站表現如何？」 |
 | `index-health` | 「Google 有沒有看到我的新頁面？」 |
 | `gsc-recipes` | 其餘任何問題——問題 → 精確 tool 呼叫的路由表 |
+
+## Agent 原生設定
+
+這個 repo 刻意把每種 agent 的設定放在它會辨識的位置；不要複製成另一套、也不要把任何憑證寫進 repo。
+
+| Agent | 自動讀取的內容 |
+|---|---|
+| Claude Code | `.mcp.json`、`.claude-plugin/`，以及 plugin 指向的 `.agents/skills/` |
+| Codex | 根目錄本檔 `AGENTS.md` 與 `.agents/skills/` |
+| Cursor | `.cursor/mcp.json` 與 `.cursor/rules/gsc-mcp.mdc` |
+| Hermes | Hermes 目前只讀使用者的 `~/.hermes/config.yaml`；照 [INSTALL.md](INSTALL.md) 的片段合併，repo 內沒有會被它自動載入的設定目錄 |
+
+任何 agent 的第一個真實查詢都應該是 `list_sites`。在不確定 property 時先列出可用 property；不要猜 site URL，也不要讀取或輸出憑證內容。
 
 ---
 

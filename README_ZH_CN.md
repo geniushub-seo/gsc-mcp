@@ -11,7 +11,7 @@
 
 </div>
 
-为 SEO 与内容团队设计：用你自己的 Google 账号登录（ADC），本地 agent（Claude Code / Codex / Cursor）就能查询你本来就有权限的 Search Console 数据——**不必**为每个资源（property）单独添加 service account。
+为 SEO 与内容团队设计：用你自己的 Google 账号登录（ADC），本地 agent（Claude Code / Codex / Cursor / Hermes）就能查询你本来就有权限的 Search Console 数据——**不必**为每个资源（property）单独添加 service account。
 
 ## 一行安装
 
@@ -139,6 +139,19 @@ mkdir -p ~/.config/gsc-mcp && chmod 700 ~/.config/gsc-mcp
 chmod 600 ~/.config/gsc-mcp/service-account.json
 ```
 
+## 各 agent 的原生上手方式
+
+想让 agent 读取项目专属设置与教学时，clone 此 repo。这些设置都不含凭证或本机绝对路径。
+
+| Agent | 原生 repo 文件 | 怎么用 |
+|---|---|---|
+| Claude Code | `.mcp.json`、`.claude-plugin/`、`.agents/skills/` | 打开 repo 或安装 plugin。 |
+| Codex | `AGENTS.md`、`.agents/skills/` | 从 repo 根目录启动 Codex。 |
+| Cursor | `.cursor/mcp.json`、`.cursor/rules/gsc-mcp.mdc` | 将 repo 当作项目打开。 |
+| Hermes | 没有 repo-local 自动读取 | 把 [INSTALL.md](INSTALL.md) 的 `mcp_servers.gsc` 片段合并到 `~/.hermes/config.yaml`。 |
+
+所有 client 的共同验收：先运行 `gsc-mcp doctor`，再让 agent 调用 `list_sites`。不要把 OAuth token 或 service-account key 放进这些文件。
+
 ## Skills（开箱即用的分析）
 
 四个 skill 随 server 一起提供，不用自己琢磨 prompt：
@@ -150,7 +163,7 @@ chmod 600 ~/.config/gsc-mcp/service-account.json
 | `index-health` | 「Google 有没有看到我的新页面？」 | sitemap 状态、逐页诊断、canonical 冲突检测 |
 | `gsc-recipes` | 其他任何问题 | 参数路由表：问题 → 精确的 tool 调用 |
 
-Claude Code 会自动加载 `skills/`。其他客户端可以把各个 `SKILL.md` 的内容当作 prompt 使用。
+Claude Code plugin 与 Codex 都会读取共用的 `.agents/skills/`。Cursor 有同一套安全默认值的 project rule；需要特定分析时，agent 可读取对应的 `SKILL.md`。
 
 ## 工具清单
 
