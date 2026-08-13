@@ -1,13 +1,19 @@
+<div align="center">
+
 # gsc-mcp
+
+### A local MCP server for Google Search Console — one Go binary, no runtime to install
 
 [![ci](https://github.com/geniushub-seo/gsc-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/geniushub-seo/gsc-mcp/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/geniushub-seo/gsc-mcp)](https://github.com/geniushub-seo/gsc-mcp/releases)
 
-Google Search Console 的本地 MCP server，單一 Go binary，stdio transport。
+English | [繁體中文](README_ZH.md)
 
-給 SEO 與內容團隊設計：用你自己的 Google 帳號登入（ADC），本地 agent（Claude Code / Codex / Cursor）就能查你本來就有權限的 Search Console 資料——**不必**為每個 property 加 service account。
+</div>
 
-## 一行安裝
+Built for SEO and content teams. Sign in once with your own Google account (ADC), and your local agent — Claude Code, Codex, Cursor — can query the Search Console data you already have access to. You do **not** need to add a service account to every property.
+
+## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.sh | bash
@@ -16,58 +22,28 @@ gcloud auth application-default login \
 gsc-mcp setup
 ```
 
-`install.sh` 會下載對應平台 binary、驗證 SHA-256、裝到 `~/.local/bin`。之後兩行請自己跑（會開瀏覽器 / 寫 MCP 設定）。詳見 [INSTALL.md](INSTALL.md) 與 [Releases](https://github.com/geniushub-seo/gsc-mcp/releases)。
+`install.sh` downloads the binary for your platform, verifies its SHA-256, and installs it to `~/.local/bin`. The other two lines you run yourself — they open a browser and write your MCP config. See [INSTALL.md](INSTALL.md) and [Releases](https://github.com/geniushub-seo/gsc-mcp/releases).
 
-## 為什麼是 Go
+## Getting started with ADC (recommended)
 
-「零依賴」指的是**執行端零 runtime 依賴**——使用者下載一個檔案就能跑，不用裝 Node、Python、Docker、.NET。
+Sign in once with your own Google account. Your MCP config needs **no** credential env vars at all.
 
-| 語言 | 單檔交付 | 使用者要裝 runtime | 判定 |
-|---|---|---|---|
-| Go | ✅ | ❌ | **採用** |
-| Rust | ✅ | ❌ | 可行，但 GSC/MCP 生態不如 Go |
-| C# Native AOT | ✅ | ❌ | binary 與 toolchain 較重 |
-| Python + PyInstaller | 勉強 | 實質內含 interpreter | 不採用 |
-| Node.js / npx | ❌ | ✅ | 不符合目標 |
-| Bun compile | 大致可 | 大致否 | 跨平台簽章與相容性變數多 |
+Easiest path: run the three lines above. Or hand the repo to an AI agent and say: install this for me, follow [INSTALL.md](INSTALL.md).
 
-原始碼引用第三方 module **不影響**這個目標，因為 Go 在 build time 就把依賴靜態連結進 binary。因此本專案採用官方 SDK，不手刻 JSON-RPC 與 JWT。
+### Doing it by hand (after the binary is installed)
 
-## 技術棧
-
-| 層 | 選型 | 版本 | 用途 |
-|---|---|---|---|
-| 語言 | Go | 1.26+ | 靜態編譯、單一 binary |
-| MCP | `github.com/modelcontextprotocol/go-sdk/mcp` | v1.7.0 | stdio transport、tool registry、schema 推導 |
-| GSC client | `google.golang.org/api/searchconsole/v1` | v0.292.0 | Searchanalytics / Sitemaps / Sites / UrlInspection |
-| 認證 | `google.golang.org/api/option` + ADC / service account | — | `authorized_user`（主推）或 `service_account`；token refresh 由 SDK 處理 |
-| Log | `log/slog`（標準庫） | — | **一律輸出 stderr** |
-| Lint | `golangci-lint` | — | CI 零警告 |
-
-`searchconsole/v1` 這一個 client 同時涵蓋 `webmasters/v3` 與 `searchconsole/v1` 兩組不同 base URL 的端點，不需要自己拼 HTTP。
-
-## 開始使用（ADC，主推）
-
-用你自己的 Google 帳號登入一次，MCP 設定**不需要**任何 `env` 憑證變數。
-
-### 最省事：一行安裝（見上方）
-
-或把 repo 給 AI agent，說：照 [INSTALL.md](INSTALL.md) 幫我裝好。
-
-### 自己動手（已裝 binary 之後）
-
-1. **gcloud**（一次）：
-   - macOS：`brew install --cask google-cloud-sdk`
-   - Linux：`curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-latest-linux-x86_64.tar.gz && tar -xf google-cloud-cli-latest-linux-x86_64.tar.gz && ./google-cloud-sdk/install.sh`（或發行版套件 `google-cloud-sdk`）
-   - Windows：`winget install Google.CloudSDK`，或下載 [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe)
-   - **警告**：不要只解壓 tarball 而不跑 `install.sh`——這樣 bundled Python 不會裝進去，啟動腳本會落到系統 `python3`（macOS 是 3.9，gcloud 需要 3.10–3.14），錯誤訊息會讓人以為是本專案有問題。那 713 MB 是 Google Cloud SDK 的大小，不是本專案的。
-2. **ADC 登入**（瀏覽器）— 見上方第二行
-3. **啟用 Search Console API**（若尚未）：  
+1. **Install gcloud** (once):
+   - macOS: `brew install --cask google-cloud-sdk`
+   - Linux: `curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-latest-linux-x86_64.tar.gz && tar -xf google-cloud-cli-latest-linux-x86_64.tar.gz && ./google-cloud-sdk/install.sh` (or your distro's `google-cloud-sdk` package)
+   - Windows: `winget install Google.CloudSDK`, or download [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe)
+   - **Warning:** do not just unpack the tarball without running `install.sh`. The bundled Python never gets installed, the launcher falls back to your system `python3` (macOS ships 3.9; gcloud needs 3.10–3.14), and the resulting error looks like a bug in this project. That 713 MB is the Google Cloud SDK, not gsc-mcp.
+2. **Sign in with ADC** (opens a browser) — the second command above.
+3. **Enable the Search Console API** if you haven't:
    https://console.cloud.google.com/apis/library/searchconsole.googleapis.com
-4. **`gsc-mcp setup`** — 合併 MCP 設定並試 `list_sites`
-5. 在 agent 裡呼叫 `list_sites` 確認 property
+4. **Run `gsc-mcp setup`** — merges your MCP config and test-calls `list_sites`.
+5. Call `list_sites` from your agent to confirm which properties you can see.
 
-### MCP 設定長這樣（ADC：只要 command）
+### What the MCP config looks like (ADC: just a command)
 
 ```json
 {
@@ -79,59 +55,53 @@ gsc-mcp setup
 }
 ```
 
-憑證自動從 `~/.config/gcloud/application_default_credentials.json` 讀取。
+Credentials are read automatically from `~/.config/gcloud/application_default_credentials.json`.
 
-### ADC refresh token 失效
+### When your ADC refresh token expires
 
-會因改密碼、久未使用、組織政策而失效。重新登入即可，不是程式壞了：
+It will, eventually — after a password change, a long idle period, or an org policy kicking in. Sign in again; nothing is broken:
 
 ```bash
 gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
 ```
 
-### 寫入（submit/delete sitemap）與 ADC
+### Writes (sitemap submit/delete) under ADC
 
-**`GSC_ENABLE_WRITE=true` 對 ADC 無效。** ADC 的 OAuth scope 在 `gcloud auth application-default login` 當下就固定了，事後無法擴大。若要寫入，必須重跑登入並帶上：
+**`GSC_ENABLE_WRITE=true` does nothing under ADC.** An ADC token's OAuth scopes are fixed at `gcloud auth application-default login` time and cannot be widened afterwards. To write, sign in again with:
 
 ```bash
 gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters,https://www.googleapis.com/auth/cloud-platform
 ```
 
-（`webmasters` 含讀寫；唯讀請用 `webmasters.readonly`。）
+(`webmasters` is read-write; use `webmasters.readonly` for read-only.)
 
-## 環境變數
+## Environment variables
 
-| 變數 | 預設 | 說明 |
+| Variable | Default | What it does |
 |---|---|---|
-| `GOOGLE_APPLICATION_CREDENTIALS` | — | 官方 ADC 路徑覆寫（優先序 2） |
-| `GOOGLE_SERVICE_ACCOUNT_FILE` | — | service account key 路徑（優先序 3） |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | — | inline JSON（優先序 4，適合 CI） |
-| `GSC_ENABLE_WRITE` | `false` | **僅 service account**：scope 升級為 `webmasters`，允許 `submit`。ADC 下會警告且無效 |
-| `GSC_ALLOW_DESTRUCTIVE` | `false` | 允許 `delete`；需同時 `GSC_ENABLE_WRITE=true`（service account） |
-| `GSC_REQUEST_TIMEOUT` | `30s` | 單次 API 呼叫 timeout |
+| `GOOGLE_APPLICATION_CREDENTIALS` | — | Official ADC path override (precedence 2) |
+| `GOOGLE_SERVICE_ACCOUNT_FILE` | — | Path to a service account key (precedence 3) |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | — | Inline JSON (precedence 4, handy in CI) |
+| `GSC_ENABLE_WRITE` | `false` | **Service account only**: upgrades the scope to `webmasters` and allows `submit`. Warns and does nothing under ADC |
+| `GSC_ALLOW_DESTRUCTIVE` | `false` | Allows `delete`; requires `GSC_ENABLE_WRITE=true` as well (service account) |
+| `GSC_REQUEST_TIMEOUT` | `30s` | Timeout for a single API call |
 | `GSC_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 
-憑證優先序：`--credentials-file`（別名 `--service-account-file`）→ `GOOGLE_APPLICATION_CREDENTIALS` → `GOOGLE_SERVICE_ACCOUNT_FILE` → `GOOGLE_SERVICE_ACCOUNT_JSON` → `.env` → **ADC 預設路徑**
-
-### 進階：從原始碼建置
-
-```bash
-go build -trimpath -ldflags="-s -w -X main.version=dev" -o ./bin/gsc-mcp ./cmd/gsc-mcp
-```
+Credential precedence: `--credentials-file` (alias `--service-account-file`) → `GOOGLE_APPLICATION_CREDENTIALS` → `GOOGLE_SERVICE_ACCOUNT_FILE` → `GOOGLE_SERVICE_ACCOUNT_JSON` → `.env` → **the default ADC path**.
 
 ### macOS Gatekeeper
 
-`install.sh` 會嘗試移除 quarantine。若你是從瀏覽器手動下載 binary，仍可能看到「無法驗證開發者」：Finder 對該檔**右鍵 → 打開 → 打開**。本專案不做 Apple 程式碼簽章。
+`install.sh` tries to remove the quarantine flag. If you downloaded the binary manually through a browser you may still see "cannot verify the developer": right-click the file in Finder → Open → Open. This project is not Apple code-signed.
 
-## 進階：service account（headless / CI）
+## Advanced: service account (headless / CI)
 
-適用：非人類身分、CI、或無法使用個人 Google 登入時。
+For non-human identities, CI, or anywhere a personal Google login isn't possible.
 
-1. GCP 啟用 Search Console API → 建 service account → 下載 JSON key  
-2. 到 Search Console **每個** property 把 `client_email` 加成使用者  
-3. MCP 設定加上 env：
+1. Enable the Search Console API in GCP → create a service account → download the JSON key.
+2. Add its `client_email` as a user on **every** property in Search Console.
+3. Add the env var to your MCP config:
 
 ```json
 {
@@ -151,73 +121,68 @@ mkdir -p ~/.config/gsc-mcp && chmod 700 ~/.config/gsc-mcp
 chmod 600 ~/.config/gsc-mcp/service-account.json
 ```
 
-## Skills（開箱即用的分析）
+## Skills (analyses that work out of the box)
 
-裝好後三個 skill 直接可用，不用自己想 prompt：
+Four skills ship with the server, so you don't have to invent the prompt yourself:
 
-| Skill | 使用者會怎麼問 | 為什麼是我們獨有 |
+| Skill | What a user would ask | What it does |
 |---|---|---|
-| `nonbrand-performance` | 「除了搜我公司名，還有誰找得到我？」 | **需要 regex filter**。其他 GSC MCP 的 operator 只有 contains/equals，做不到排除品牌詞的任意變體 |
-| `monthly-report` | 「這個月網站表現如何？」 | 含品牌／非品牌切分，不是灌水版月報 |
-| `index-health` | 「Google 有沒有看到我的新頁面？」 | sitemap 狀態 + URL 逐頁診斷 + canonical 衝突偵測 |
-| `gsc-recipes` | 其餘任何問題 | **參數路由表**——問題 → 精確的 tool 呼叫 |
+| `nonbrand-performance` | "Who finds me *without* searching my company name?" | Splits branded from non-branded traffic using regex query filters (`excludingRegex`), which catches every spelling variant of your brand |
+| `monthly-report` | "How did the site do this month?" | A monthly report with the branded/non-branded split built in |
+| `index-health` | "Has Google seen my new pages yet?" | Sitemap status, per-URL diagnosis, and canonical-conflict detection |
+| `gsc-recipes` | Anything else | A parameter routing table: question → the exact tool call |
 
-Claude Code 會自動載入 `skills/`。其他 client 可把 `SKILL.md` 內容當 prompt 用。
+Claude Code loads `skills/` automatically. Other clients can use the contents of each `SKILL.md` as a prompt.
 
-### 為什麼 6 支 tool 就夠
+## Tools
 
-其他 GSC server 把每個常見用法做成獨立 tool——`get_performance_overview`、`get_search_by_page_query`、`get_advanced_search_analytics` 其實是**同一個 API 呼叫的不同預設參數**。某個對手 21 支 tool 裡有 10 支是這種變體。
-
-代價是每次請求都要把所有 schema 傳給 LLM，選錯的機率也隨之上升。
-
-我們用 `gsc-recipes` 這張路由表取代那 10 支。表格不用維護、不佔 context、也不會選錯。**只有 LLM 做不到的運算才值得做成 tool**——例如對 25,000 列算中位數基準，那種塞不進 context 的工作。
-
-## 工具清單
-
-| Tool | 底層 API | 寫入 | 說明 |
+| Tool | Underlying API | Writes | Notes |
 |---|---|---|---|
-| `list_sites` | `sites.list` | — | 列出所有已授權 property（多客戶入口） |
-| `get_site` | `sites.get` | — | 查單一 property 的 permissionLevel |
-| `query_search_analytics` | `searchanalytics.query` | — | 核心查詢，完整參數透傳 |
-| `compare_periods` | `searchanalytics.query` ×2 | — | server 端封裝，回傳兩期數據 + delta |
-| `inspect_url` | `urlInspection.index.inspect` | — | 批次 1–10 URL，序列呼叫 |
-| `manage_sitemaps` | `sitemaps.list/get/submit/delete` | 條件 | 四合一；submit/delete 需旗標 |
+| `list_sites` | `sites.list` | — | Every property you're authorized for — the multi-client entry point |
+| `get_site` | `sites.get` | — | `permissionLevel` for one property |
+| `query_search_analytics` | `searchanalytics.query` | — | The core query, full parameter pass-through |
+| `compare_periods` | `searchanalytics.query` ×2 | — | Server-side wrapper: two periods plus deltas |
+| `inspect_url` | `urlInspection.index.inspect` | — | 1–10 URLs per call, issued sequentially |
+| `manage_sitemaps` | `sitemaps.list/get/submit/delete` | conditional | Four actions in one; submit/delete are flag-gated |
 
-### 明確不做
+Six tools is deliberate. Overviews, by-page breakdowns and "advanced" analytics are all the *same* API call with different default parameters — shipping each as its own tool inflates the schema payload sent to the LLM on every request and raises the odds it picks the wrong one. The `gsc-recipes` routing table covers those cases instead, at zero context cost. A wrapper only earns its place when the LLM genuinely cannot do the work itself, such as computing a median baseline across 25,000 rows.
 
-- `sites.add` / `sites.delete`：add 後仍需 UI 驗證，delete 誤刪風險過高
-- Indexing API：官方僅開放 JobPosting / BroadcastEvent
-- 涵蓋範圍報告、Core Web Vitals、連結報告：官方 API 不存在
+### Deliberately not implemented
 
-## 資料特性（會寫進 tool description 給 LLM 看）
+- `sites.add` / `sites.delete` — add still requires verification in the UI, and delete is too easy to fire by accident.
+- Indexing API — Google only opened it for `JobPosting` and `BroadcastEvent`.
+- Coverage reports, Core Web Vitals, link reports — no official API exists.
 
-- 日期為 **PT 時區**（UTC−7/−8），非 UTC 也非台北時間
-- 資料有 **2–4 天延遲**，僅保留 **16 個月**；近期日期可能回傳不完整資料
-- API 只回傳 top rows，**不保證完整資料**；總和不會等於後台總計
-- `rowLimit` 上限 **25,000**（GSC 後台介面一次只給 1,000，這是用 API 的主要好處），超過要用 `startRow` 分頁
-- `HOUR` 維度必須搭配 `dataState: HOURLY_ALL`，且只有近 **10 天**資料
-- filter 只能作用於 `QUERY` / `PAGE` / `COUNTRY` / `DEVICE` / `SEARCH_APPEARANCE`，**不能** filter `DATE` 或 `HOUR`
-- 若 group 或 filter 了 `page`，`aggregationType` 不能用 `BY_PROPERTY`
-- 平均排名是加權平均，不是「這個字排第幾名」的事實
+## How the data behaves (all of this is in the tool descriptions the LLM reads)
 
-`site_url` 可以直接給裸網域（`example.com`）、完整 URL 或標準 `sc-domain:` 格式，server 會正規化；猜錯導致 403 時會自動查詢可存取的 property 重試一次。
+- Dates are in **PT** (UTC−7/−8) — not UTC, not your local time.
+- Data lags **2–4 days** and is retained for **16 months**. Recent dates can come back incomplete.
+- The API returns top rows only and **does not guarantee completeness**. Sums will not match the totals in the web UI.
+- `rowLimit` caps at **25,000** (the web UI gives you 1,000 at a time — this is the main reason to use the API). Page past it with `startRow`.
+- The `HOUR` dimension requires `dataState: HOURLY_ALL` and only covers the last **10 days**.
+- Filters only apply to `QUERY` / `PAGE` / `COUNTRY` / `DEVICE` / `SEARCH_APPEARANCE` — you **cannot** filter on `DATE` or `HOUR`.
+- If you group or filter by `page`, `aggregationType` cannot be `BY_PROPERTY`.
+- Average position is a weighted average, not the factual answer to "what position does this keyword rank at".
 
-## 開發
+`site_url` accepts a bare domain (`example.com`), a full URL, or the canonical `sc-domain:` form — the server normalizes it. If the guess is wrong and Google returns 403, it looks up your accessible properties and retries once.
+
+## Development
 
 ```bash
+go build -trimpath -ldflags="-s -w -X main.version=dev" -o ./bin/gsc-mcp ./cmd/gsc-mcp
 go test ./... && go vet ./... && golangci-lint run
 ```
 
-## 交叉編譯 / Release
+## See also
 
-```bash
-make build-release VERSION=v0.1.0   # 本機五平台 + checksums.txt
-```
+- [INSTALL.md](INSTALL.md) — installation guide written for an AI agent to follow
+- [SPEC.md](SPEC.md) — the frozen technical spec
+- [docs/blog-gsc-mcp.md](docs/blog-gsc-mcp.md) — a plain-language walkthrough of installing and using it (Traditional Chinese)
 
-推送 tag `v*` 會觸發 `.github/workflows/release.yml`，產出五平台 binary 與 `checksums.txt`。`initialize` 的 `serverInfo.version` 應等於 tag（本機已用 `-X main.version=v0.0.0-test` 實證）。
+---
 
-## 相關文件
+<div align="center">
 
-- [INSTALL.md](INSTALL.md) — 給 AI agent 的安裝指引（幫使用者裝起來用）
-- [SPEC.md](SPEC.md) — 定稿技術規格
-- [docs/blog-gsc-mcp.md](docs/blog-gsc-mcp.md) — 安裝與使用情境的白話導覽
+Built by **[Genius Hub](https://geniushub.cc/)** · Licensed under [MIT](LICENSE)
+
+</div>
