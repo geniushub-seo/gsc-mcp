@@ -56,7 +56,16 @@ type inspectURLResult struct {
 	MobileUsabilityVerdict string             `json:"mobile_usability_verdict,omitempty"`
 	RichResultsVerdict     string             `json:"rich_results_verdict,omitempty"`
 	AmpVerdict             string             `json:"amp_verdict,omitempty"`
-	Error                  string             `json:"error,omitempty"`
+	Error                  *inspectURLError   `json:"error,omitempty"`
+}
+
+// inspectURLError is the per-URL counterpart to a top-level tool error. A
+// batch may contain successful and failed inspections, so failures live beside
+// the affected URL rather than collapsing into an ambiguous flat string.
+type inspectURLError struct {
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	Suggestion string `json:"suggestion"`
 }
 
 type indexStatusResult struct {
@@ -147,8 +156,12 @@ func inspectURL(ctx context.Context, client *gscclient.Client, quota *gscclient.
 		if callErr != nil {
 			mapped := gscclient.MapGoogleAPIError(callErr)
 			results = append(results, inspectURLResult{
-				URL:   u,
-				Error: fmt.Sprintf("%s: %s", mapped.Code, mapped.Message),
+				URL: u,
+				Error: &inspectURLError{
+					Code:       string(mapped.Code),
+					Message:    mapped.Message,
+					Suggestion: mapped.Suggestion,
+				},
 			})
 			continue
 		}

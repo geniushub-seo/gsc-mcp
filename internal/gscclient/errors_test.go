@@ -145,3 +145,12 @@ func TestNewError_WriteDisabled(t *testing.T) {
 		t.Fatal("Error() empty")
 	}
 }
+
+func TestNewError_PreservesLocalMessage(t *testing.T) {
+	t.Parallel()
+	message := strings.Repeat("property;", 60)
+	got := NewError(ErrPermissionDenied, message, "use list_sites")
+	if got.Message != message {
+		t.Fatalf("local message was truncated: got %d bytes, want %d", len(got.Message), len(message))
+	}
+}

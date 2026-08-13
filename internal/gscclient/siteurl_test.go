@@ -3,6 +3,7 @@ package gscclient
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -247,6 +248,39 @@ func TestResolveSiteURL_NotFound_ReturnsPermissionDenied(t *testing.T) {
 	}
 	if !strings.Contains(clientErr.Message, "sc-domain:other.com") {
 		t.Fatalf("error should list accessible properties, got %q", clientErr.Message)
+	}
+}
+
+func TestResolveSiteURL_ListsEveryAccessibleProperty(t *testing.T) {
+	t.Parallel()
+	sites := make([]*searchconsole.WmxSite, 14)
+	for i := range sites {
+		sites[i] = &searchconsole.WmxSite{SiteUrl: fmt.Sprintf("sc-domain:property-%02d.example.com", i)}
+	}
+
+	_, err := ResolveSiteURL(context.Background(), &fakeSiteLister{sites: sites}, "example.com", "")
+	var clientErr Error
+	if !errors.As(err, &clientErr) {
+		t.Fatalf("expected gscclient.Error, got %T", err)
+	}
+	for i := range sites {
+		if !strings.Contains(clientErr.Message, sites[i].SiteUrl) {
+			t.Fatalf("message omitted property %q: %q", sites[i].SiteUrl, clientErr.Message)
+		}
+	}
+}
+
+func TestResolveSiteURL_ExcludedOnlyMatchReportsDeniedAccess(t *testing.T) {
+	t.Parallel()
+	_, err := ResolveSiteURL(context.Background(), &fakeSiteLister{sites: []*searchconsole.WmxSite{
+		{SiteUrl: "sc-domain:example.com"},
+	}}, "example.com", "sc-domain:example.com")
+	var clientErr Error
+	if !errors.As(err, &clientErr) {
+		t.Fatalf("expected gscclient.Error, got %T", err)
+	}
+	if !strings.Contains(clientErr.Message, "access to it was denied") {
+		t.Fatalf("message must distinguish denied access, got %q", clientErr.Message)
 	}
 }
 

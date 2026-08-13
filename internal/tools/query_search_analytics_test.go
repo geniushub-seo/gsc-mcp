@@ -274,6 +274,34 @@ func TestToAnalyticsRows_RoundsAndOmitsZeroPosition(t *testing.T) {
 	}
 }
 
+func TestQuerySearchAnalytics_EchoesCanonicalDomainProperty(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(&searchconsole.SearchAnalyticsQueryResponse{})
+	}))
+	defer srv.Close()
+
+	result, _, err := querySearchAnalytics(context.Background(), newTestClient(t, srv.URL+"/"), querySearchAnalyticsInput{
+		SiteURL:   "SC-DOMAIN:EXAMPLE.COM",
+		StartDate: "2026-07-01",
+		EndDate:   "2026-07-31",
+	})
+	if err != nil {
+		t.Fatalf("querySearchAnalytics error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool error: %s", extractText(t, result.Content))
+	}
+	var out querySearchAnalyticsOutput
+	if err := json.Unmarshal([]byte(extractText(t, result.Content)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.SiteURL != "sc-domain:example.com" {
+		t.Fatalf("site_url = %q, want canonical domain property", out.SiteURL)
+	}
+}
+
 func extractText(t *testing.T, content []mcp.Content) string {
 	t.Helper()
 	if len(content) == 0 {

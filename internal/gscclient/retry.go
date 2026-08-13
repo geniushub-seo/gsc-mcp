@@ -15,8 +15,9 @@ const (
 )
 
 // doWithRetry runs fn up to retryMaxAttempts times. It retries only on HTTP 429
-// and 5xx. After exhausting retries it returns a structured quota_exceeded error.
-// 4xx validation/permission errors are returned immediately without retry.
+// and 5xx. An exhausted 429 is quota_exceeded; an exhausted 5xx is
+// upstream_error. 4xx validation/permission errors are returned immediately
+// without retry.
 func doWithRetry[T any](ctx context.Context, sleep func(time.Duration) <-chan time.Time, fn func(context.Context) (T, error)) (T, error) {
 	var zero T
 	var lastErr error
@@ -45,10 +46,18 @@ func doWithRetry[T any](ctx context.Context, sleep func(time.Duration) <-chan ti
 		}
 	}
 
+	mapped := MapGoogleAPIError(lastErr)
+	if mapped.Code == ErrQuotaExceeded {
+		return zero, NewError(
+			ErrQuotaExceeded,
+			"upstream request remained rate limited after retries: "+truncate(mapped.Message, 200),
+			quotaExceededSuggestion,
+		)
+	}
 	return zero, NewError(
-		ErrQuotaExceeded,
-		"upstream request failed after retries: "+truncate(lastErr.Error(), 200),
-		"reduce the date range, remove the 'page' dimension, or wait before retrying",
+		ErrUpstreamError,
+		"upstream request failed after retries: "+truncate(mapped.Message, 200),
+		"the Google API remained unavailable; retry after a short wait",
 	)
 }
 

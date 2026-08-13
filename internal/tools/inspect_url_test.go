@@ -199,3 +199,45 @@ func TestMapInspectResult_NilOptionalSections(t *testing.T) {
 		t.Fatalf("expected index status PASS, got %+v", got.IndexStatus)
 	}
 }
+
+func TestInspectURL_PartialFailuresUseStructuredPerURLFailure(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request searchconsole.InspectUrlIndexRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(request.InspectionUrl, "/missing") {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":{"message":"URL not found"}}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(&searchconsole.InspectUrlIndexResponse{
+			InspectionResult: &searchconsole.UrlInspectionResult{IndexStatusResult: &searchconsole.IndexStatusInspectionResult{Verdict: "PASS"}},
+		})
+	}))
+	defer srv.Close()
+
+	result, _, err := inspectURL(context.Background(), newTestClient(t, srv.URL+"/"), gscclient.NewDailyQuota(100), inspectURLInput{
+		SiteURL: "sc-domain:example.com",
+		URLs:    []string{"https://example.com/ok", "https://example.com/missing"},
+	}, func(time.Duration) {}, 0)
+	if err != nil {
+		t.Fatalf("inspectURL error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("partial failure must remain a batch result: %s", extractText(t, result.Content))
+	}
+
+	var out inspectURLOutput
+	if err := json.Unmarshal([]byte(extractText(t, result.Content)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Results) != 2 || out.Results[1].Error == nil {
+		t.Fatalf("missing structured per-URL failure: %+v", out.Results)
+	}
+	if got := out.Results[1].Error; got.Code != string(gscclient.ErrNotFound) || got.Message != "URL not found" || got.Suggestion == "" {
+		t.Fatalf("failure = %+v, want code/message/suggestion", got)
+	}
+}

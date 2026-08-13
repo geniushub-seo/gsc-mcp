@@ -34,8 +34,8 @@ func NormalizeSiteURL(input string) string {
 		return input
 	}
 
-	if strings.HasPrefix(input, "sc-domain:") {
-		return input
+	if len(input) >= len("sc-domain:") && strings.EqualFold(input[:len("sc-domain:")], "sc-domain:") {
+		return "sc-domain:" + strings.ToLower(input[len("sc-domain:"):])
 	}
 
 	if strings.Contains(input, "://") {
@@ -130,11 +130,29 @@ func ResolveSiteURL(ctx context.Context, lister SiteLister, input, exclude strin
 	for i, s := range sites.SiteEntry {
 		accessible[i] = s.SiteUrl
 	}
+	if exclude != "" && siteURLMatchesApex(exclude, apex) {
+		return "", NewError(
+			ErrPermissionDenied,
+			fmt.Sprintf("a matching GSC property was found for %q, but access to it was denied; accessible properties: %v", input, accessible),
+			"ask the property owner to grant this credential access to the matching Search Console property",
+		)
+	}
 	return "", NewError(
 		ErrPermissionDenied,
 		fmt.Sprintf("no matching GSC property found for %q; accessible properties: %v", input, accessible),
 		"use list_sites to see accessible properties or ask the property owner to add the service account email",
 	)
+}
+
+func siteURLMatchesApex(siteURL, apex string) bool {
+	if strings.EqualFold(siteURL, "sc-domain:"+apex) {
+		return true
+	}
+	if !strings.HasPrefix(strings.ToLower(siteURL), "http") {
+		return false
+	}
+	u, err := url.Parse(siteURL)
+	return err == nil && strings.EqualFold(extractApexDomain(u.Host), apex)
 }
 
 // WithResolvedSiteURL wraps a site-scoped API call. It first uses the normalized
@@ -166,8 +184,8 @@ func WithResolvedSiteURL[T any](ctx context.Context, lister SiteLister, siteURL 
 
 func extractApexFromInput(input string) string {
 	input = strings.TrimSpace(input)
-	if strings.HasPrefix(input, "sc-domain:") {
-		return strings.TrimPrefix(input, "sc-domain:")
+	if len(input) >= len("sc-domain:") && strings.EqualFold(input[:len("sc-domain:")], "sc-domain:") {
+		return strings.ToLower(input[len("sc-domain:"):])
 	}
 	if strings.Contains(input, "://") {
 		if u, err := url.Parse(input); err == nil {
@@ -184,5 +202,5 @@ func extractApexDomain(host string) string {
 	if idx := strings.LastIndex(host, ":"); idx != -1 {
 		host = host[:idx]
 	}
-	return strings.TrimPrefix(host, "www.")
+	return strings.ToLower(strings.TrimPrefix(host, "www."))
 }

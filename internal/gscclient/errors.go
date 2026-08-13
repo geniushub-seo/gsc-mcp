@@ -34,12 +34,15 @@ func (e Error) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-// NewError creates a structured error from a known code and a human-readable
-// message. The suggestion is optional.
+// NewError creates a structured error from a known code and a locally produced
+// human-readable message. The suggestion is optional. Local messages are not
+// truncated: some intentionally enumerate every accessible property so the
+// caller can recover without another API request. Only upstream messages are
+// truncated in MapGoogleAPIError.
 func NewError(code ErrorCode, message, suggestion string) Error {
 	return Error{
 		Code:       code,
-		Message:    truncate(message, 300),
+		Message:    message,
 		Suggestion: suggestion,
 	}
 }
@@ -65,6 +68,8 @@ const quotaProjectSuggestion = "this is not a property permission problem: the c
 const credentialsRejectedSuggestion = "the credentials were rejected before any API call, so retrying will not help. " +
 	"Service account: the key may have been deleted or disabled — generate a new one. " +
 	"ADC: re-run gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform"
+
+const quotaExceededSuggestion = "wait briefly before retrying; if this persists, review the Search Console API quota limits"
 
 // MapGoogleAPIError maps a googleapi.Error (or wrapped googleapi.Error) to a
 // structured Error. Messages are truncated to 300 characters and never include
@@ -102,7 +107,7 @@ func MapGoogleAPIError(err error) Error {
 	case 404:
 		return Error{Code: ErrNotFound, Message: msg, Suggestion: "check the site_url or feedpath; use list_sites to see accessible properties"}
 	case 429:
-		return Error{Code: ErrQuotaExceeded, Message: msg, Suggestion: "reduce the date range, remove the 'page' dimension, or wait before retrying"}
+		return Error{Code: ErrQuotaExceeded, Message: msg, Suggestion: quotaExceededSuggestion}
 	default:
 		if gerr.Code >= 500 {
 			return Error{Code: ErrUpstreamError, Message: msg, Suggestion: "this is a Google API error; retry after a short wait"}

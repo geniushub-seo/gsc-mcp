@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/geniushub-seo/gsc-mcp/internal/config"
-	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	"google.golang.org/api/searchconsole/v1"
 )
@@ -158,7 +157,7 @@ func TestContract_HTTPErrorMapping(t *testing.T) {
 		{"error_403.json", 403, ErrPermissionDenied},
 		{"error_404.json", 404, ErrNotFound},
 		{"error_429.json", 429, ErrQuotaExceeded},
-		{"error_500.json", 500, ErrQuotaExceeded}, // after retries exhausted
+		{"error_500.json", 500, ErrUpstreamError},
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
@@ -174,16 +173,6 @@ func TestContract_HTTPErrorMapping(t *testing.T) {
 			}
 			mapped := MapGoogleAPIError(err)
 			if mapped.Code != tc.want {
-				// 500 becomes quota_exceeded after retry exhaust; direct googleapi is upstream before map of final error
-				if tc.code == 500 {
-					var ge *googleapi.Error
-					// final error from doWithRetry is gscclient.Error quota_exceeded
-					if mapped.Code != ErrQuotaExceeded && mapped.Code != ErrUpstreamError {
-						t.Fatalf("code=%d mapped=%q err=%v", tc.code, mapped.Code, err)
-					}
-					_ = ge
-					return
-				}
 				t.Fatalf("mapped=%q want %q err=%v", mapped.Code, tc.want, err)
 			}
 		})

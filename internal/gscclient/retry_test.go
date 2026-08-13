@@ -3,6 +3,7 @@ package gscclient
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,7 +39,7 @@ func TestDoWithRetry_Retries429ThenSucceeds(t *testing.T) {
 	}
 }
 
-func TestDoWithRetry_ExhaustedReturnsQuotaExceeded(t *testing.T) {
+func TestDoWithRetry_Exhausted5xxReturnsUpstreamError(t *testing.T) {
 	t.Parallel()
 
 	var sleeps atomic.Int32
@@ -59,14 +60,32 @@ func TestDoWithRetry_ExhaustedReturnsQuotaExceeded(t *testing.T) {
 	if !errors.As(err, &clientErr) {
 		t.Fatalf("expected gscclient.Error, got %T %v", err, err)
 	}
-	if clientErr.Code != ErrQuotaExceeded {
-		t.Fatalf("code = %q, want quota_exceeded", clientErr.Code)
+	if clientErr.Code != ErrUpstreamError {
+		t.Fatalf("code = %q, want upstream_error", clientErr.Code)
 	}
 	if calls.Load() != 3 {
 		t.Fatalf("calls = %d, want 3", calls.Load())
 	}
 	if sleeps.Load() != 2 {
 		t.Fatalf("sleeps = %d, want 2 (between 3 attempts)", sleeps.Load())
+	}
+}
+
+func TestDoWithRetry_Exhausted429ReturnsQuotaExceeded(t *testing.T) {
+	t.Parallel()
+
+	_, err := doWithRetry(context.Background(), immediateSleep, func(context.Context) (string, error) {
+		return "", &googleapi.Error{Code: 429, Message: "rate limited"}
+	})
+	var clientErr Error
+	if !errors.As(err, &clientErr) {
+		t.Fatalf("expected gscclient.Error, got %T %v", err, err)
+	}
+	if clientErr.Code != ErrQuotaExceeded {
+		t.Fatalf("code = %q, want quota_exceeded", clientErr.Code)
+	}
+	if strings.Contains(clientErr.Suggestion, "page") {
+		t.Fatalf("suggestion must not invent request parameters: %q", clientErr.Suggestion)
 	}
 }
 

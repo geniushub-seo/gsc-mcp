@@ -290,7 +290,7 @@ Go error 只保留給「連 result 都組不出來」的情況。
 ```json
 {
   "error": "<code>",
-  "message": "<人類可讀，已 sanitize，≤300 字元>",
+  "message": "<人類可讀；上游訊息已 sanitize 且 ≤300 字元，本地 property 列表可完整列出>",
   "suggestion": "<下一步該做什麼>"
 }
 ```
@@ -303,8 +303,8 @@ Go error 只保留給「連 result 都組不出來」的情況。
 | `auth_failed` | 401 |
 | `permission_denied` | 403，service account 未被加進該 property |
 | `not_found` | 404 |
-| `quota_exceeded` | 429 或退避重試耗盡 |
-| `upstream_error` | 5xx 或無法解析的回應 |
+| `quota_exceeded` | 429（含退避重試後仍為 429） |
+| `upstream_error` | 5xx（含退避重試後仍為 5xx）或無法解析的回應 |
 | `write_disabled` | 旗標未開卻呼叫寫入 action |
 
 ## 6. v2 候選（v1 穩定後再做）
