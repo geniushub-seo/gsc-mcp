@@ -1,0 +1,28 @@
+{
+  "siteEntry": [
+    {
+      "siteUrl": "sc-domain:example.com",
+      "permissionLevel": "siteOwner"
+    },
+    {
+      "siteUrl": "https://example.com/",
+      "permissionLevel": "siteOwner"
+    },
+    {
+      "siteUrl": "sc-domain:example2.com",
+      "permissionLevel": "siteFullUser"
+    },
+    {
+      "siteUrl": "https://www.example2.com/",
+      "permissionLevel": "siteFullUser"
+    },
+    {
+      "siteUrl": "https://example3.com/",
+      "permissionLevel": "siteUnverifiedUser"
+    },
+    {
+      "siteUrl": "sc-domain:example3.com",
+      "permissionLevel": "siteUnverifiedUser"
+    }
+  ]
+}

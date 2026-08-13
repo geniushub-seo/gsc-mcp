@@ -1,0 +1,22 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - exhaustive
+    - godot
+    - noctx
+    - unconvert
+    - unparam
+    - unused
+    - misspell
+    - revive
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+
+run:
+  timeout: 5m

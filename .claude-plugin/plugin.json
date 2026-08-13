@@ -1,0 +1,14 @@
+{
+  "name": "gsc-mcp",
+  "displayName": "Google Search Console MCP",
+  "version": "0.3.0",
+  "description": "Query Google Search Console from your AI agent. Single Go binary, no runtime to install. The only GSC MCP with regex query filters, so you can measure organic growth with branded searches excluded.",
+  "author": {
+    "name": "geniushub-seo"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/geniushub-seo/gsc-mcp",
+  "keywords": ["seo", "google-search-console", "gsc", "mcp", "search-analytics", "indexing"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}

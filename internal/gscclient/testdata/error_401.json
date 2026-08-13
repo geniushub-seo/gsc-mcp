@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": 401,
+    "message": "Request is missing required authentication credential.",
+    "status": "UNAUTHENTICATED"
+  }
+}

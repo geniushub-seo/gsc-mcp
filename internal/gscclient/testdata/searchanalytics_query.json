@@ -1,0 +1,50 @@
+{
+  "responseAggregationType": "byPage",
+  "rows": [
+    {
+      "clicks": 930,
+      "ctr": 0.009998387356877922,
+      "impressions": 93015,
+      "keys": [
+        "https://example.com/social-marketing/ig-font-guide/"
+      ],
+      "position": 6.375896360802021
+    },
+    {
+      "clicks": 249,
+      "ctr": 0.011118056795856403,
+      "impressions": 22396,
+      "keys": [
+        "https://example.com/social-marketing/instagram-image-sizes/"
+      ],
+      "position": 6.388551527058404
+    },
+    {
+      "clicks": 195,
+      "ctr": 0.018100807574491784,
+      "impressions": 10773,
+      "keys": [
+        "https://example.com/social-marketing/ig-reels-size/"
+      ],
+      "position": 5.741947461245707
+    },
+    {
+      "clicks": 94,
+      "ctr": 0.04268846503178928,
+      "impressions": 2202,
+      "keys": [
+        "https://example.com/social-marketing/ig-beginners-guide/"
+      ],
+      "position": 14.079473206176203
+    },
+    {
+      "clicks": 84,
+      "ctr": 0.07792207792207792,
+      "impressions": 1078,
+      "keys": [
+        "https://example.com/"
+      ],
+      "position": 6.283858998144712
+    }
+  ]
+}

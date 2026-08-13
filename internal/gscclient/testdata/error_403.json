@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": 403,
+    "message": "User does not have sufficient permission for site 'sc-domain:example.com'. See also: https://support.google.com/webmasters/answer/2451999.",
+    "status": "PERMISSION_DENIED"
+  }
+}

@@ -1,0 +1,34 @@
+# 憑證 —— 絕不進版控
+#
+# 根目錄的所有 .json 一律忽略。GCP 下載的 key 檔預設命名是「專案-金鑰ID.json」
+# （例如 my-project-1a2b3c4d5e6f.json），不含 service-account / key 等字樣，
+# 靠關鍵字樣式擋不住。testdata/ 下的契約 fixture 在子目錄，不受此規則影響。
+/*.json
+# 例外：plugin manifest 引用的 MCP 設定範本，檔名固定，不會與憑證撞名。
+# gitignore 不支援行尾註解，註解必須獨立成行。
+!.mcp.json
+*service-account*.json
+*credentials*.json
+*-key.json
+*.pem
+*.p12
+.env
+.env.*
+!.env.example
+
+# 建置產物
+/bin/
+/dist/
+/gsc-mcp
+gsc-mcp-*
+*.exe
+
+# Go
+*.test
+*.out
+coverage.*
+
+# 編輯器 / OS
+.DS_Store
+.idea/
+.vscode/

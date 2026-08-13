@@ -1,0 +1,23 @@
+{
+  "inspectionResult": {
+    "indexStatusResult": {
+      "coverageState": "已提交並建立索引",
+      "crawledAs": "MOBILE",
+      "googleCanonical": "https://example.com/",
+      "indexingState": "INDEXING_ALLOWED",
+      "lastCrawlTime": "2026-08-05T02:26:26Z",
+      "pageFetchState": "SUCCESSFUL",
+      "referringUrls": [
+        "https://referrer.example.com/summary-of-youth-business-start-up-loan-interest-subsidy/",
+        "https://other.example.com/new-mindset-of-real-estate-transaction/"
+      ],
+      "robotsTxtState": "ALLOWED",
+      "userCanonical": "https://example.com/",
+      "verdict": "PASS"
+    },
+    "inspectionResultLink": "https://search.google.com/search-console/inspect?resource_id=sc-domain:example.com&id=DC6lyXW7ND_XKkD_SRcKZw&utm_medium=link&utm_source=api",
+    "mobileUsabilityResult": {
+      "verdict": "VERDICT_UNSPECIFIED"
+    }
+  }
+}

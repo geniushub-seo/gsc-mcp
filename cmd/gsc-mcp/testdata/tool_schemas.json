@@ -1,0 +1,234 @@
+{
+  "note": "schemas are explicitly written to avoid [null,array] union types",
+  "tools": {
+    "compare_periods": {
+      "additionalProperties": false,
+      "properties": {
+        "data_state": {
+          "description": "Optional data freshness: all (default), final, or hourly_all.",
+          "type": "string"
+        },
+        "dimensions": {
+          "description": "Optional dimensions to group by: query, page, country, device, date, hour, or searchAppearance.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "period_a_end": {
+          "description": "End date of period A — baseline/earlier period (YYYY-MM-DD, PT).",
+          "type": "string"
+        },
+        "period_a_start": {
+          "description": "Start date of period A — baseline/earlier period (YYYY-MM-DD, PT). All deltas are B minus A.",
+          "type": "string"
+        },
+        "period_b_end": {
+          "description": "End date of period B — current/later period (YYYY-MM-DD, PT).",
+          "type": "string"
+        },
+        "period_b_start": {
+          "description": "Start date of period B — current/later period (YYYY-MM-DD, PT). All deltas are B minus A.",
+          "type": "string"
+        },
+        "row_limit": {
+          "description": "Optional max rows in the response. Default 100, maximum 25000. This caps the joined output, not just each period.",
+          "type": "integer"
+        },
+        "search_type": {
+          "description": "Optional search type: web, image, video, news, discover, or googleNews. Omit to let Google default to web.",
+          "type": "string"
+        },
+        "site_url": {
+          "description": "The GSC property to query.",
+          "type": "string"
+        },
+        "sort_by": {
+          "description": "Optional sort key: clicks_delta (default), impressions_delta, ctr_delta_pp, or position_change. Every delta ordering requires scanning up to 25,000 rows per period because the GSC API can only order by clicks.",
+          "type": "string"
+        },
+        "sort_order": {
+          "description": "Optional sort direction: asc or desc. Defaults to desc for the delta keys (biggest gains first; use asc for biggest drops) and asc for position_change (biggest rank improvement first).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "site_url",
+        "period_a_start",
+        "period_a_end",
+        "period_b_start",
+        "period_b_end"
+      ],
+      "type": "object"
+    },
+    "get_site": {
+      "additionalProperties": false,
+      "properties": {
+        "site_url": {
+          "description": "The GSC property to look up. Supports bare domain (example.com), full URL (https://www.example.com/), or canonical GSC property format (sc-domain:example.com).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "site_url"
+      ],
+      "type": "object"
+    },
+    "inspect_url": {
+      "additionalProperties": false,
+      "properties": {
+        "language_code": {
+          "description": "Optional IETF BCP-47 language code for translated issue messages. Defaults to zh-TW.",
+          "type": "string"
+        },
+        "site_url": {
+          "description": "The GSC property that owns the URLs. Supports bare domain, full URL, or canonical GSC format.",
+          "type": "string"
+        },
+        "urls": {
+          "description": "One to ten fully qualified URLs to inspect under the property.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "site_url",
+        "urls"
+      ],
+      "type": "object"
+    },
+    "list_sites": {
+      "additionalProperties": false,
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "manage_sitemaps": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "description": "One of: list, get, submit, delete.",
+          "type": "string"
+        },
+        "feedpath": {
+          "description": "Sitemap URL. Required for get, submit, and delete.",
+          "type": "string"
+        },
+        "site_url": {
+          "description": "The GSC property. Supports bare domain, full URL, or canonical GSC format.",
+          "type": "string"
+        },
+        "sitemap_index": {
+          "description": "Optional sitemap index URL; only used with action=list.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "site_url",
+        "action"
+      ],
+      "type": "object"
+    },
+    "query_search_analytics": {
+      "additionalProperties": false,
+      "properties": {
+        "aggregation_type": {
+          "description": "Optional aggregation type: auto (default), byProperty, byPage, or byNewsShowcasePanel. Cannot be byProperty when grouping or filtering by page.",
+          "type": "string"
+        },
+        "data_state": {
+          "description": "Optional data freshness: all (default, matches the GSC console), final (only finalized data), or hourly_all (required for hour dimension).",
+          "type": "string"
+        },
+        "dimension_filter_groups": {
+          "description": "Optional dimension filters. Each group contains groupType='and' and an array of filters with dimension, operator, and expression. Use excludingRegex to exclude branded terms.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "filters": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "dimension": {
+                      "description": "Dimension to filter on: query, page, country, device, or searchAppearance.",
+                      "type": "string"
+                    },
+                    "expression": {
+                      "description": "The value or regex to filter by.",
+                      "type": "string"
+                    },
+                    "operator": {
+                      "description": "Filter operator: equals, notEquals, contains, notContains, includingRegex, excludingRegex.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "dimension",
+                    "operator",
+                    "expression"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "groupType": {
+                "description": "Filter logic within the group. Only 'and' is supported by the GSC API.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "dimensions": {
+          "description": "Optional dimensions to group by: query, page, country, device, date, hour, or searchAppearance. Use hour only with data_state=hourly_all.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "end_date": {
+          "description": "End date of the query range in YYYY-MM-DD format. Dates are in PT (Pacific Time) timezone.",
+          "type": "string"
+        },
+        "row_limit": {
+          "description": "Optional maximum number of rows to return. Default 150, maximum 25000. For export set row_limit explicitly (up to 25000).",
+          "type": "integer"
+        },
+        "search_type": {
+          "description": "Optional search type filter: web, image, video, news, discover, or googleNews. Omit to let Google apply its own default (web).",
+          "type": "string"
+        },
+        "site_url": {
+          "description": "The GSC property to query. Supports bare domain (example.com), full URL (https://www.example.com/), or canonical GSC format (sc-domain:example.com).",
+          "type": "string"
+        },
+        "sort_by": {
+          "description": "Optional sort key: clicks (default), impressions, ctr, or position. Anything other than clicks desc makes the server scan up to 25,000 rows and sort locally, because the GSC API can only order by clicks.",
+          "type": "string"
+        },
+        "sort_order": {
+          "description": "Optional sort direction: asc or desc. Defaults to desc for clicks/impressions/ctr and asc for position (lower position is a better rank).",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "Start date of the query range in YYYY-MM-DD format. Dates are in PT (Pacific Time) timezone.",
+          "type": "string"
+        },
+        "start_row": {
+          "description": "Optional zero-based offset for pagination.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "site_url",
+        "start_date",
+        "end_date"
+      ],
+      "type": "object"
+    }
+  },
+  "union_fields": []
+}
