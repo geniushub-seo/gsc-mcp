@@ -19,11 +19,27 @@ import (
 
 // Options controls setup behaviour.
 type Options struct {
-	DryRun     bool
+	// DryRun suppresses every file write.
+	DryRun bool
+
+	// LiveCheck forces the read-only list_sites verification even when DryRun
+	// is set. Kept separate from DryRun because "don't touch my files" and
+	// "don't tell me whether my credentials work" are unrelated requests, and
+	// bundling them left `setup --dry-run` unable to answer the only question
+	// most callers have. `doctor` sets both.
+	LiveCheck bool
+
 	BinaryPath string // absolute path to gsc-mcp binary
 	Stdout     *os.File
 	Stderr     *os.File
 }
+
+// serverName is the key this server is registered under in every MCP client config.
+const serverName = "gsc"
+
+// goos is runtime.GOOS, overridable so the per-OS path logic can be tested
+// from any host. Same pattern as config.adcPathFn.
+var goos = runtime.GOOS
 
 // Result is a human-readable report of what setup did or would do.
 type Result struct {
@@ -72,7 +88,7 @@ func Run(opts Options) (Result, error) {
 	}
 
 	// 1. gcloud
-	checkGcloud(logf)
+	gcloudPath := checkGcloud(logf)
 
 	// 2. ADC
 	adcPath := config.DefaultADCPath()
@@ -108,12 +124,10 @@ func Run(opts Options) (Result, error) {
 		logf("  Claude Code: claude CLI not found")
 	}
 
-	// Claude Desktop (macOS)
-	if runtime.GOOS == "darwin" {
-		home, _ := os.UserHomeDir()
-		desktopPath := filepath.Join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json")
+	// Claude Desktop — path differs per OS; "" means we have no location for it.
+	if desktopPath := claudeDesktopConfigPath(); desktopPath != "" {
 		logf("  Claude Desktop config: %s", desktopPath)
-		if err := mergeMCPConfig(desktopPath, "gsc", bin, opts.DryRun, logf); err != nil {
+		if err := mergeMCPConfig(desktopPath, bin, opts.DryRun, logf); err != nil {
 			logf("    error: %v", err)
 		}
 	}
@@ -123,12 +137,31 @@ func Run(opts Options) (Result, error) {
 		cursorPath := filepath.Join(home, ".cursor", "mcp.json")
 		if _, err := os.Stat(filepath.Dir(cursorPath)); err == nil {
 			logf("  Cursor config: %s", cursorPath)
-			if err := mergeMCPConfig(cursorPath, "gsc", bin, opts.DryRun, logf); err != nil {
+			if err := mergeMCPConfig(cursorPath, bin, opts.DryRun, logf); err != nil {
 				logf("    error: %v", err)
 			}
 		} else {
 			logf("  Cursor: config dir not found (skip)")
 		}
+	}
+
+	// Project-scoped .mcp.json (Codex, Claude Code project config, and others).
+	// Only touched when it already exists: creating one in whatever directory
+	// setup happens to run from would scatter config files around.
+	const projectConfig = ".mcp.json"
+	if _, err := os.Stat(projectConfig); err == nil {
+		abs, absErr := filepath.Abs(projectConfig)
+		if absErr != nil {
+			abs = projectConfig
+		}
+		logf("  Project config found: %s", abs)
+		if err := mergeMCPConfig(projectConfig, bin, opts.DryRun, logf); err != nil {
+			logf("    error: %v", err)
+		}
+	} else {
+		logf("  Project .mcp.json: not in the current directory (skip)")
+		logf("    If your client uses one (Codex, project-scoped Claude Code), create it there with:")
+		logf("%s", indent(snippet, "      "))
 	}
 
 	// VS Code — don't guess path
@@ -137,17 +170,85 @@ func Run(opts Options) (Result, error) {
 
 	logf("Note: ADC users need no env block in MCP config — credentials come from the ADC default path.")
 
-	// 4. Optional live check (uses ADC default path / env; never prints secrets)
+	// 4. Live check (read-only; uses ADC default path / env; never prints secrets)
 	logf("verify: attempting list_sites with resolved credentials...")
-	if opts.DryRun {
-		logf("  dry-run: skip live API call")
-	} else if err := verifyListSites(logf); err != nil {
-		logf("  list_sites failed: %v", err)
-		logf("  (setup config may still be fine — fix credentials/scopes and retry)")
+	switch {
+	case opts.DryRun && !opts.LiveCheck:
+		logf("  dry-run: skip live API call (run `gsc-mcp doctor` to verify without writing files)")
+	default:
+		if err := verifyListSites(logf); err != nil {
+			logf("  list_sites failed: %v", err)
+			explainVerifyFailure(err, gcloudPath, logf)
+		}
 	}
 
 	logf("Done.")
 	return res, nil
+}
+
+// explainVerifyFailure turns a failed list_sites into the specific next action.
+// Each branch exists because the raw error points somewhere unhelpful: the
+// quota-project 403 reads as a Search Console permission problem, and a token
+// rejection reads as a broken install.
+func explainVerifyFailure(err error, gcloudPath string, logf func(string, ...any)) {
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "quota project"):
+		logf("  Diagnosis: the credentials have no quota project. This is NOT a property")
+		logf("  permission problem — do not add users in the Search Console UI.")
+		suggestQuotaProject(gcloudPath, logf)
+	case strings.Contains(msg, "cannot fetch token"), strings.Contains(msg, "invalid_grant"):
+		logf("  Diagnosis: the credentials were rejected before any API call. Retrying will not help.")
+		logf("  Re-run the ADC login:")
+		logf("    gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform")
+	case strings.Contains(msg, "accessnotconfigured"), strings.Contains(msg, "has not been used in project"):
+		logf("  Diagnosis: the Search Console API is not enabled on the quota project.")
+		logf("  Enable it: https://console.cloud.google.com/apis/library/searchconsole.googleapis.com")
+		logf("  (select the quota project in the top-left project picker first)")
+	default:
+		logf("  (MCP config may still be fine — fix credentials/scopes and retry)")
+	}
+}
+
+// suggestQuotaProject lists candidate GCP projects so the caller picks a real
+// one instead of guessing from names. Guessing is the observed failure mode:
+// an agent with no list to work from picks whichever project id looks
+// topical and only finds out it was wrong on the next error.
+func suggestQuotaProject(gcloudPath string, logf func(string, ...any)) {
+	logf("  Fix: gcloud auth application-default set-quota-project YOUR_PROJECT_ID")
+
+	if gcloudPath == "" {
+		logf("  (gcloud is not usable here, so the project list cannot be shown —")
+		logf("   run `gcloud projects list` in a working terminal to find the id)")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, gcloudPath, "projects", "list",
+		"--format=value(projectId)", "--limit=25").Output()
+	if err != nil {
+		logf("  Could not list projects (%v). Run this yourself to find the id:", err)
+		logf("    gcloud projects list")
+		logf("  If it reports expired credentials, note that `gcloud auth login` and")
+		logf("  `gcloud auth application-default login` are separate logins — you need both.")
+		return
+	}
+
+	ids := strings.Fields(strings.TrimSpace(string(out)))
+	if len(ids) == 0 {
+		logf("  This account has no GCP projects. Create one, then enable the Search Console API:")
+		logf("    https://console.cloud.google.com/projectcreate")
+		return
+	}
+
+	logf("  Projects available to this account (%d):", len(ids))
+	for _, id := range ids {
+		logf("    %s", id)
+	}
+	logf("  Pick the one with the Search Console API enabled — verify before setting it:")
+	logf("    gcloud services list --enabled --filter=searchconsole.googleapis.com --project=PROJECT_ID")
+	logf("  Empty output means that project is the wrong one (or the API is not enabled yet).")
 }
 
 func verifyListSites(logf func(string, ...any)) error {
@@ -191,26 +292,44 @@ func checkGcloud(logf func(string, ...any)) string {
 	path, err := exec.LookPath("gcloud")
 	if err != nil {
 		logf("gcloud: NOT FOUND in PATH")
-		printGcloudInstallInstructions(logf)
-		checkCommonGcloudDirs(logf)
-		return ""
+		// An off-PATH install is still usable — every gcloud command we suggest
+		// works with an absolute path. Only tell the user to install if the
+		// disk search also comes up empty.
+		path = findGcloudOffPath(logf)
+		if path == "" {
+			printGcloudInstallInstructions(logf)
+			return ""
+		}
+	} else {
+		logf("gcloud: found at %s", path)
 	}
-	logf("gcloud: found at %s", path)
 
+	// Locating gcloud is not the same as being able to run it: a sandboxed
+	// shell can see the launcher and still be denied execution, and a
+	// tarball install can be missing its bundled Python. Both surface here.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, path, "--version").CombinedOutput()
 	if err != nil {
-		logf("gcloud: found but failed to run (%v)", err)
-		msg := strings.ToLower(string(out))
-		if strings.Contains(msg, "python") || strings.Contains(msg, "cloudsdk_python") {
+		logf("gcloud: %s exists but failed to run (%v)", path, err)
+		msg := strings.ToLower(string(out) + " " + err.Error())
+		switch {
+		case strings.Contains(msg, "python") || strings.Contains(msg, "cloudsdk_python"):
 			logf("  This usually means gcloud cannot find a compatible Python (3.10–3.14).")
 			logf("    Try: export CLOUDSDK_PYTHON=/path/to/python3.12 && gcloud --version")
 			logf("    If that works, add it to your shell profile.")
+			logf("  If you installed by extracting a tarball without running install.sh, bundled Python may be missing.")
+			logf("    Recommended fix: reinstall with the official installer.")
+		case strings.Contains(msg, "access is denied") || strings.Contains(msg, "permission denied"):
+			logf("  gcloud exists but this shell is not allowed to execute it.")
+			logf("  This is an environment restriction, not a gsc-mcp problem — reinstalling will not help.")
+			logf("  If you are an AI agent in a sandbox: ask the user to run the gcloud commands")
+			logf("  in their own terminal and report back. Do not keep retrying here.")
+			return ""
+		default:
+			logf("  Recommended fix: reinstall with the official installer.")
 		}
-		logf("  If you installed by extracting a tarball without running install.sh, bundled Python may be missing.")
-		logf("    Recommended fix: reinstall with the official installer.")
-		switch runtime.GOOS {
+		switch goos {
 		case "darwin":
 			logf("      brew install --cask google-cloud-sdk")
 		case "linux":
@@ -226,9 +345,32 @@ func checkGcloud(logf func(string, ...any)) string {
 	return path
 }
 
+// claudeDesktopConfigPath returns the Claude Desktop config location for this
+// OS, or "" where the app does not ship. Windows was previously skipped even
+// though INSTALL.md documents its path, so Windows users were told setup would
+// handle a file it never touched.
+func claudeDesktopConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	switch goos {
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json")
+	case "windows":
+		base := os.Getenv("APPDATA")
+		if base == "" {
+			base = filepath.Join(home, "AppData", "Roaming")
+		}
+		return filepath.Join(base, "Claude", "claude_desktop_config.json")
+	default:
+		return ""
+	}
+}
+
 func printGcloudInstallInstructions(logf func(string, ...any)) {
 	logf("  Install Google Cloud SDK (~713 MB download from Google), then re-run setup:")
-	switch runtime.GOOS {
+	switch goos {
 	case "darwin":
 		logf("    brew install --cask google-cloud-sdk")
 	case "linux":
@@ -244,30 +386,69 @@ func printGcloudInstallInstructions(logf func(string, ...any)) {
 	logf("  Warning: do not just extract a tarball without running install.sh — bundled Python will not be set up and gcloud may fail with a system Python version error.")
 }
 
-func checkCommonGcloudDirs(logf func(string, ...any)) {
+// gcloudCandidates lists install locations to probe when gcloud is not in PATH.
+// Windows needs its own list: the winget and official-installer paths live under
+// AppData/Program Files and the launcher is gcloud.cmd, so a POSIX-only list
+// misses every Windows install — the exact case that sends an agent on a
+// recursive disk search.
+func gcloudCandidates() []string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return
+		home = ""
 	}
-	candidates := []string{
-		filepath.Join(home, "google-cloud-sdk", "bin", "gcloud"),
-		filepath.Join(home, "google-cloud-cli", "bin", "gcloud"),
+
+	if goos == "windows" {
+		const sdkBin = `Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd`
+		var out []string
+		for _, base := range []string{
+			os.Getenv("LOCALAPPDATA"),
+			os.Getenv("ProgramFiles"),
+			os.Getenv("ProgramFiles(x86)"),
+		} {
+			if base != "" {
+				out = append(out, filepath.Join(base, sdkBin))
+			}
+		}
+		if home != "" {
+			// Covers the case where LOCALAPPDATA is unset in a stripped environment.
+			out = append(out, filepath.Join(home, "AppData", "Local", sdkBin))
+		}
+		return out
+	}
+
+	var out []string
+	if home != "" {
+		out = append(out,
+			filepath.Join(home, "google-cloud-sdk", "bin", "gcloud"),
+			filepath.Join(home, "google-cloud-cli", "bin", "gcloud"),
+		)
+	}
+	return append(out,
 		"/usr/local/google-cloud-sdk/bin/gcloud",
 		"/opt/google-cloud-sdk/bin/gcloud",
-	}
-	for _, c := range candidates {
-		if _, sterr := os.Stat(c); sterr == nil {
-			dir := filepath.Dir(c)
-			logf("  Found an installation at %s but it is not in PATH.", dir)
-			if runtime.GOOS == "windows" {
-				logf("    Add it to PATH in System Settings, or run:")
-				logf("      $env:Path = \"%s;$env:Path\"", dir)
-			} else {
-				logf("    Add it: export PATH=%q:$PATH  (restart terminal after)", dir)
-			}
-			return
+		"/opt/homebrew/share/google-cloud-sdk/bin/gcloud",
+		"/usr/local/share/google-cloud-sdk/bin/gcloud",
+	)
+}
+
+// findGcloudOffPath returns the first gcloud found outside PATH, or "".
+func findGcloudOffPath(logf func(string, ...any)) string {
+	for _, c := range gcloudCandidates() {
+		if _, err := os.Stat(c); err != nil {
+			continue
 		}
+		dir := filepath.Dir(c)
+		logf("  Found an installation at %s but it is not in PATH.", dir)
+		logf("  Using the absolute path for the checks below; run any gcloud command the same way.")
+		if goos == "windows" {
+			logf("    To fix PATH for this shell:  $env:Path = \"%s;$env:Path\"", dir)
+			logf("    To fix it permanently, add that directory in System Settings > Environment Variables.")
+		} else {
+			logf("    Add it: export PATH=%q:$PATH  (restart terminal after)", dir)
+		}
+		return c
 	}
+	return ""
 }
 
 // MergeMCPConfigFile reads path, merges server entry under mcpServers[name], writes back with backup.
@@ -324,14 +505,19 @@ func MergeMCPConfigFile(path, name, command string, dryRun bool) (merged []byte,
 	return out, backupPath, nil
 }
 
-func mergeMCPConfig(path, name, command string, dryRun bool, logf func(string, ...any)) error {
-	merged, backup, err := MergeMCPConfigFile(path, name, command, dryRun)
+// mergeMCPConfig adds the gsc server entry to an MCP client config file.
+// The server name is fixed: every client we touch keys this server as "gsc".
+func mergeMCPConfig(path, command string, dryRun bool, logf func(string, ...any)) error {
+	_, backup, err := MergeMCPConfigFile(path, serverName, command, dryRun)
 	if err != nil {
 		return err
 	}
 	if dryRun {
-		logf("    dry-run merged config would be:")
-		logf("%s", indent(string(merged), "      "))
+		// Print only the entry we would add, never the merged document. Other
+		// servers in the same file routinely carry API keys in their env block,
+		// and this output gets pasted into chat transcripts and bug reports.
+		logf("    dry-run: would add this entry under mcpServers (existing entries untouched):")
+		logf("%s", indent(mcpServerSnippet(command), "      "))
 		return nil
 	}
 	if backup != "" {

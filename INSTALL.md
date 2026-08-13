@@ -2,13 +2,27 @@
 
 **這份文件是寫給 AI agent 讀的。** 使用者把整個 repo 交給你，要你幫他把這支 MCP server 裝好。照下面做。
 
+> 若你是要**修改本專案程式碼**的 agent，這份不是給你的——請讀 [AGENTS.md](AGENTS.md)。
+
 ---
 
 ## 首選：一行安裝
 
+macOS / Linux：
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.sh | bash
 ```
+
+Windows（PowerShell）：
+
+```powershell
+irm https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.ps1 | iex
+```
+
+**Windows 一定要用 `install.ps1`，不要自己 `Invoke-WebRequest` 抓 binary。** 手動下載會
+跳過 SHA-256 驗證，也不會清掉 SmartScreen 的封鎖標記，而且通常會裝進當前專案目錄而非
+PATH，害後面每個 MCP 設定都得寫死絕對路徑。
 
 先 dry-run 看會做什麼：
 
@@ -16,7 +30,13 @@ curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.
 curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.sh | bash -s -- --dry-run
 ```
 
-`install.sh` 只負責：判平台、下載 release、驗 SHA-256、裝到 `~/.local/bin`、macOS 移除 quarantine、PATH 提示。  
+```powershell
+$env:DRY_RUN = '1'; irm https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.ps1 | iex
+```
+
+安裝腳本只負責：判平台、下載 release、驗 SHA-256、裝到 `~/.local/bin`（Windows 是
+`%LOCALAPPDATA%\Programs\gsc-mcp`）、解除 quarantine / SmartScreen 封鎖、PATH 提示。
+
 **不會**跑 `gcloud login`、不會改 MCP 設定、不會改 shell rc。
 
 接著請使用者自己跑（印指令，不代跑）：
@@ -24,8 +44,12 @@ curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.
 ```bash
 gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
 gsc-mcp setup
 ```
+
+第二行不能省，理由見步驟 1c。裝完或出錯時跑 `gsc-mcp doctor` 驗證（完整檢查 + 真實
+`list_sites`，不寫檔）。
 
 ---
 
@@ -94,18 +118,90 @@ ls -la ~/.config/gcloud/application_default_credentials.json
 
 **不要把檔案內容印進對話或 log。**
 
-### ADC refresh token 失效時
+### 1c. 設定 quota project（ADC 必做，漏掉會 403）
 
-使用者改密碼、久未使用、或組織政策可能讓 token 失效。症狀像「突然 auth 失敗」。處置是重跑上面的 `application-default login`，不是重裝 binary。
+ADC 是使用者個人帳號，不隸屬任何 GCP 專案，Google 因此不知道這次呼叫要算在誰的配額上。
+service account 的 key 自帶專案資訊，ADC 沒有，所以要另外指定一次。
 
-### 寫入 sitemap 時
+請使用者跑（`YOUR_PROJECT_ID` 換成步驟 1b 啟用 Search Console API 的那個專案 ID，
+是小寫那串 ID，不是專案顯示名稱）：
 
-ADC 的 scope **在登入當下固定**。`GSC_ENABLE_WRITE=true` **對 ADC 無效**。若使用者要 submit/delete，請他們用 `webmasters`（非 readonly）重跑登入：
+```bash
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+```
+
+這條指令把 `quota_project_id` 寫進 ADC JSON，`gsc-mcp` 讀到後才會帶上去
+（`internal/gscclient/client.go` 的 `option.WithQuotaProject`）。
+
+**漏掉這步的症狀**：`list_sites` 回 403 `permission_denied`，訊息含 `requires a quota project`。
+這**不是** GSC property 權限問題，別去 Search Console 後台加人。`gsc-mcp` 已針對這個字串
+回傳專屬提示，直接照它給的指令跑即可。
+
+### 1d. ADC 故障自我修復表
+
+**這張表是給你（agent）用的。** 每一種症狀都會被誤診成別的問題——誤診的代價是你叫使用者去
+改 Search Console 權限、重裝 binary、重裝 gcloud，或設一個無效的環境變數，全都不會有任何效果。
+先對症狀，再照「處置」給指令，不要自己推理成因。
+
+| 症狀 | 真正原因 | 常見誤診（別這樣做） | 處置 |
+|---|---|---|---|
+| 403 `permission_denied`，訊息含 `requires a quota project` | ADC 沒設 quota project | 以為使用者對該 property 沒權限，叫他去 GSC 後台加人 | 回到 1c 跑 `set-quota-project` |
+| 突然 `auth_failed`，訊息含 `cannot fetch token` 或 `invalid_grant` | refresh token 失效（改密碼、久未使用、組織政策） | 以為 binary 壞了，叫他重裝或重跑 `install.sh` | 重跑 1b 的 `application-default login` |
+| `submit` / `delete` sitemap 被拒或 403 | ADC scope 在登入當下就固定了 | 叫他設 `GSC_ENABLE_WRITE=true`——**對 ADC 完全無效** | 用 `webmasters`（非 readonly）重跑登入，見下 |
+| `gcloud projects list`（或其他 gcloud 指令）說憑證過期，但 ADC 剛剛才登入成功 | 這是**另一套** token（見下） | 以為 ADC 登入沒生效，重跑 `application-default login`——修不到這個 | 跑 `gcloud auth login` |
+| Windows 上 `gcloud` 回「not recognized」，但確定裝過 | 裝了但不在 PATH | 以為沒裝，重跑 `winget install`（會回報 already installed 然後卡住） | 用完整路徑：`%LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd` |
+
+**`gcloud auth login` 和 `gcloud auth application-default login` 是兩套獨立的憑證**，
+各自登入、各自過期、互不影響：
+
+| 指令 | 給誰用 | 存在哪 |
+|---|---|---|
+| `gcloud auth login` | `gcloud` CLI 本身（`projects list`、`services list` 等） | gcloud 自己的設定目錄 |
+| `gcloud auth application-default login` | **你寫的程式**，包括 `gsc-mcp` | `application_default_credentials.json` |
+
+實務上的陷阱：ADC 登入成功之後跑 `gcloud projects list` 仍然可能失敗，因為那條指令用的是
+第一套。**兩套都要有**——`gsc-mcp` 要第二套才能查資料，而你要用 `gcloud` 幫使用者找 quota
+project ID 時需要第一套。看到「剛登入卻說過期」不要繞圈子，直接補跑另一套。
+
+**為什麼 `GSC_ENABLE_WRITE=true` 對 ADC 無效**：OAuth token 的權限範圍（scope）在使用者按下
+授權的那一刻就寫死在 token 裡，程式端的 `option.WithScopes` 擴不了一個已經發出去的 token
+（見 `internal/config/config.go` 的 `Scopes()` 註解）。這個旗標只對 service account 有效。
+`gsc-mcp` 啟動時若偵測到 ADC + `GSC_ENABLE_WRITE=true`，會在 stderr 印警告——
+**看到那行警告就直接照它做，不要再往下追查**。
+
+ADC 要開寫入權限，唯一方法是重新登入並換 scope：
 
 ```bash
 gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters,https://www.googleapis.com/auth/cloud-platform
 ```
+
+（`delete` 另外還要 `GSC_ALLOW_DESTRUCTIVE=true`，這個旗標對 ADC 和 service account 都有效，
+因為它是本專案自己的閘門，不是 OAuth scope。）
+
+**先跑 `gsc-mcp doctor`。** 它會跑完上述所有檢查、**真的呼叫一次 `list_sites`**，然後
+**不寫入任何檔案**。ADC 出問題時這是第一個該跑的指令，不要自己手刻 JSON-RPC 去測——
+它已經把那件事做完了，而且會針對失敗原因印出對應的修復指令。
+
+```bash
+gsc-mcp doctor
+```
+
+注意 `gsc-mcp setup --dry-run` **不等於** doctor：`--dry-run` 會跳過 API 呼叫，
+所以它答不出「我的憑證到底能不能用」。要驗證憑證就用 `doctor`。
+
+**再看 stderr。** `gsc-mcp` 所有日誌走 stderr（stdout 只有 MCP 協定訊息）。
+預設 log level 是 info，這個級別**只**看得到上面那兩行旗標警告。
+
+若要確認「憑證到底是從哪裡讀到的」——這是 ADC 問題最常見的盲點，使用者常有一個忘記的
+`GOOGLE_APPLICATION_CREDENTIALS` 環境變數蓋掉了 ADC——必須開 debug：
+
+```bash
+GSC_LOG_LEVEL=debug gsc-mcp
+```
+
+debug 會多印一行 `credentials loaded from ...`，告訴你命中的是六個來源中的哪一個
+（優先序見 `internal/config/config.go` 檔頭）。
 
 ---
 

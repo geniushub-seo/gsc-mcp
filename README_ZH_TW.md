@@ -15,14 +15,30 @@
 
 ## 一行安裝
 
+**macOS / Linux**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.sh | bash
 gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
 gsc-mcp setup
 ```
 
-`install.sh` 會下載對應平台 binary、驗證 SHA-256、裝到 `~/.local/bin`。之後兩行請自己跑（會開瀏覽器 / 寫 MCP 設定）。詳見 [INSTALL.md](INSTALL.md) 與 [Releases](https://github.com/geniushub-seo/gsc-mcp/releases)。
+**Windows（PowerShell）**
+
+```powershell
+irm https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.ps1 | iex
+gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+gsc-mcp setup
+```
+
+安裝腳本會下載對應平台 binary、**驗證 SHA-256**、裝到 `~/.local/bin`（Windows 是 `%LOCALAPPDATA%\Programs\gsc-mcp`），並解除 macOS quarantine / Windows SmartScreen 封鎖標記。之後三行請自己跑（會開瀏覽器 / 寫 MCP 設定）。詳見 [INSTALL.md](INSTALL.md) 與 [Releases](https://github.com/geniushub-seo/gsc-mcp/releases)。
+
+`YOUR_PROJECT_ID` 換成你啟用 Search Console API 的 GCP 專案 ID。**這行不能省**——ADC 是個人帳號、不隸屬任何專案，少了它所有查詢會回 403 `requires a quota project`，看起來很像權限問題但不是。
+
+裝完有任何一步不順，跑 `gsc-mcp doctor`——完整檢查加一次真實 `list_sites`，不寫任何檔案。
 
 ## 開始使用（ADC，主推）
 
@@ -37,11 +53,13 @@ gsc-mcp setup
    - Linux：`curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-latest-linux-x86_64.tar.gz && tar -xf google-cloud-cli-latest-linux-x86_64.tar.gz && ./google-cloud-sdk/install.sh`（或發行版套件 `google-cloud-sdk`）
    - Windows：`winget install Google.CloudSDK`，或下載 [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe)
    - **警告**：不要只解壓 tarball 而不跑 `install.sh`——這樣 bundled Python 不會裝進去，啟動腳本會落到系統 `python3`（macOS 是 3.9，gcloud 需要 3.10–3.14），錯誤訊息會讓人以為是本專案有問題。那 713 MB 是 Google Cloud SDK 的大小，不是本專案的。
-2. **ADC 登入**（會開瀏覽器）——上面第二行。
-3. **啟用 Search Console API**（若尚未）：
-   https://console.cloud.google.com/apis/library/searchconsole.googleapis.com
-4. **跑 `gsc-mcp setup`**——合併 MCP 設定並試呼叫 `list_sites`。
-5. 在 agent 裡呼叫 `list_sites` 確認看得到哪些 property。
+2. **啟用 Search Console API**（若尚未）：於 [API Library](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com) 按 Enable。先確認左上角選到的是你要用的專案，並記下它的專案 ID（小寫那串，不是顯示名稱）。
+3. **ADC 登入**（會開瀏覽器）——上面第二行。
+4. **設 quota project**——上面第三行。ADC 必做，漏掉每次查詢都會 403。
+5. **跑 `gsc-mcp setup`**——合併 MCP 設定並試呼叫 `list_sites`。
+6. 在 agent 裡呼叫 `list_sites` 確認看得到哪些 property。
+
+出問題時跑 `gsc-mcp doctor`：完整檢查加一次真實 `list_sites`，**不寫任何檔案**，並針對失敗原因給出對應指令（缺 quota project、token 失效、API 未啟用各有各的處置）。`setup --dry-run` 會跳過 API 呼叫，答不出憑證能不能用，別拿它當診斷工具。
 
 ### MCP 設定長這樣（ADC：只要 command）
 

@@ -205,10 +205,23 @@ Next steps (run these yourself — this script will not):
      gcloud auth application-default login ``
        --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
 
-  2) Wire MCP clients / verify access:
+  2) Point ADC at a quota project (required — ADC has no project of its own,
+     and without this every query fails with a 403 that looks like a
+     permission problem):
+     gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+
+     Use the GCP project that has the Search Console API enabled:
+     https://console.cloud.google.com/apis/library/searchconsole.googleapis.com
+
+  3) Wire MCP clients / verify access:
      $dest setup
+
+If anything fails, run "$dest doctor": it checks everything, makes one real
+list_sites call, writes no files, and prints the fix for what it finds.
 
 Need gcloud? https://cloud.google.com/sdk/docs/install
   Windows: winget install Google.CloudSDK
+  If gcloud is installed but "not recognized", it is on disk but not on PATH —
+  it usually lives in %LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin.
 
 "@

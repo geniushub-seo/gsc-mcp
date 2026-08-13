@@ -15,20 +15,36 @@ Built for SEO and content teams. Sign in once with your own Google account (ADC)
 
 ## Install
 
+**macOS / Linux**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.sh | bash
 gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
 gsc-mcp setup
 ```
 
-`install.sh` downloads the binary for your platform, verifies its SHA-256, and installs it to `~/.local/bin`. The other two lines you run yourself — they open a browser and write your MCP config. See [INSTALL.md](INSTALL.md) and [Releases](https://github.com/geniushub-seo/gsc-mcp/releases).
+**Windows (PowerShell)**
+
+```powershell
+irm https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.ps1 | iex
+gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+gsc-mcp setup
+```
+
+The install script downloads the binary for your platform, verifies its SHA-256, and installs it to `~/.local/bin` (`%LOCALAPPDATA%\Programs\gsc-mcp` on Windows), clearing the macOS quarantine flag or the Windows SmartScreen block marker. The other three lines you run yourself — they open a browser and write your MCP config. See [INSTALL.md](INSTALL.md) and [Releases](https://github.com/geniushub-seo/gsc-mcp/releases).
+
+Replace `YOUR_PROJECT_ID` with the GCP project where you enabled the Search Console API. **Do not skip that line.** ADC is your personal account and belongs to no project, so without a quota project every query fails with a 403 that reads exactly like a permissions problem and isn't one.
+
+If any step misbehaves, run `gsc-mcp doctor`: every check plus one real `list_sites` call, and it writes no files.
 
 ## Getting started with ADC (recommended)
 
 Sign in once with your own Google account. Your MCP config needs **no** credential env vars at all.
 
-Easiest path: run the three lines above. Or hand the repo to an AI agent and say: install this for me, follow [INSTALL.md](INSTALL.md).
+Easiest path: run the lines above. Or hand the repo to an AI agent and say: install this for me, follow [INSTALL.md](INSTALL.md) — that file is written for agents, and [AGENTS.md](AGENTS.md) tells it how to use the tools once they are installed.
 
 ### Doing it by hand (after the binary is installed)
 
@@ -37,11 +53,13 @@ Easiest path: run the three lines above. Or hand the repo to an AI agent and say
    - Linux: `curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-latest-linux-x86_64.tar.gz && tar -xf google-cloud-cli-latest-linux-x86_64.tar.gz && ./google-cloud-sdk/install.sh` (or your distro's `google-cloud-sdk` package)
    - Windows: `winget install Google.CloudSDK`, or download [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe)
    - **Warning:** do not just unpack the tarball without running `install.sh`. The bundled Python never gets installed, the launcher falls back to your system `python3` (macOS ships 3.9; gcloud needs 3.10–3.14), and the resulting error looks like a bug in this project. That 713 MB is the Google Cloud SDK, not gsc-mcp.
-2. **Sign in with ADC** (opens a browser) — the second command above.
-3. **Enable the Search Console API** if you haven't:
-   https://console.cloud.google.com/apis/library/searchconsole.googleapis.com
-4. **Run `gsc-mcp setup`** — merges your MCP config and test-calls `list_sites`.
-5. Call `list_sites` from your agent to confirm which properties you can see.
+2. **Enable the Search Console API** if you haven't: hit Enable in the [API Library](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com). Check the project picker top-left first, and note that project's ID (the lowercase string, not the display name).
+3. **Sign in with ADC** (opens a browser) — the second command above.
+4. **Set the quota project** — the third command above. Required under ADC; skipping it means a 403 on every query.
+5. **Run `gsc-mcp setup`** — merges your MCP config and test-calls `list_sites`.
+6. Call `list_sites` from your agent to confirm which properties you can see.
+
+If something breaks, run `gsc-mcp doctor`. It runs every check plus one real `list_sites` call, **writes no files**, and prints the specific fix for what it finds — a missing quota project, an expired token, and a disabled API each get their own instructions. `setup --dry-run` skips the API call entirely, so it cannot tell you whether your credentials work; don't use it to diagnose.
 
 ### What the MCP config looks like (ADC: just a command)
 

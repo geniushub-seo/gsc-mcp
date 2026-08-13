@@ -260,11 +260,11 @@ ADC 使用者憑證**沒有隱含的配額專案**，少了它 Google 會拒絕�
 
 **ADC 的 scope 在 `gcloud auth application-default login` 當下就固定在 refresh token 上。** OAuth 的 refresh grant 不允許擴大 scope，所以事後傳 `option.WithScopes` 加不上去。
 
-這會製造一個**靜默失效的旗標**：ADC 使用者設 `GSC_ENABLE_WRITE=true`，程式以為開了寫入，Google 卻回 403。處置：
+這會製造一個**靜默失效的旗標**：ADC 使用者設 `GSC_ENABLE_WRITE=true`，程式以為開了寫入，Google 卻回 403。這類「解析了但沒接上」的旗標必須處理：
 
 - ADC 模式下若 `GSC_ENABLE_WRITE=true`，啟動時發 `slog.Warn`，說明 ADC 的 scope 由登入決定，要寫入必須重跑登入並在 `--scopes` 帶上 `https://www.googleapis.com/auth/webmasters`
 - `README.md` 與 `INSTALL.md` 都要寫明這件事
-- 需要一條測試證明該警告會出現（新增設定項要有測試證明它真的改變行為）
+- 需要一條測試證明該警告會出現（`AGENTS.md`：新增設定項要有測試證明它真的改變行為）
 
 ADC 使用者要用讀取功能，登入時的 scope 至少要包含：
 

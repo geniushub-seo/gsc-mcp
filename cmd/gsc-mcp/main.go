@@ -1,8 +1,10 @@
 // Command gsc-mcp is a local MCP server for Google Search Console.
 // It speaks stdio JSON-RPC. Credentials: ADC (preferred) or service account.
 //
-//	gsc-mcp                  # run MCP server on stdio
+//	gsc-mcp                    # run MCP server on stdio
 //	gsc-mcp setup [--dry-run]  # check ADC / write MCP client config
+//	gsc-mcp doctor             # diagnose only: every check incl. a live
+//	                           # list_sites call, and never writes a file
 package main
 
 import (
@@ -27,12 +29,21 @@ import (
 var version = "dev"
 
 func main() {
-	if len(os.Args) >= 2 && os.Args[1] == "setup" {
-		if err := runSetup(os.Args[2:]); err != nil {
-			fmt.Fprintf(os.Stderr, "gsc-mcp setup: %v\n", err)
-			os.Exit(1)
+	if len(os.Args) >= 2 {
+		switch os.Args[1] {
+		case "setup":
+			if err := runSetup(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "gsc-mcp setup: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		case "doctor":
+			if err := runDoctor(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "gsc-mcp doctor: %v\n", err)
+				os.Exit(1)
+			}
+			return
 		}
-		return
 	}
 
 	if err := runServer(); err != nil {
@@ -48,7 +59,23 @@ func runSetup(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	return runSetupWith(setup.Options{DryRun: *dryRun})
+}
 
+// runDoctor diagnoses without changing anything: it runs every setup check
+// plus a real list_sites call, and writes no files. `setup --dry-run` cannot
+// serve this purpose because it also skips the API call, which is the one
+// thing a caller debugging credentials needs to know.
+func runDoctor(args []string) error {
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	return runSetupWith(setup.Options{DryRun: true, LiveCheck: true})
+}
+
+func runSetupWith(opts setup.Options) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -58,11 +85,9 @@ func runSetup(args []string) error {
 		return err
 	}
 
-	_, err = setup.Run(setup.Options{
-		DryRun:     *dryRun,
-		BinaryPath: bin,
-		Stderr:     os.Stderr,
-	})
+	opts.BinaryPath = bin
+	opts.Stderr = os.Stderr
+	_, err = setup.Run(opts)
 	return err
 }
 
