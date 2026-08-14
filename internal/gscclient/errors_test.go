@@ -39,9 +39,9 @@ func TestMapGoogleAPIError_AllCodes(t *testing.T) {
 // TestMapGoogleAPIError_QuotaProject403 covers the first error a new ADC user
 // hits: the credentials are fine and the property is accessible, but no quota
 // project is associated, so Search Console answers 403. The generic 403
-// suggestion ("ask the property owner to add the service account email") sends
-// an ADC user to do something that cannot possibly help — they have no service
-// account. Message body reproduced locally by removing quota_project_id from
+// suggestion used to name a service-account email, which sent an ADC user to
+// do something that cannot possibly help. Message body reproduced locally by
+// removing quota_project_id from
 // ~/.config/gcloud/application_default_credentials.json and calling list_sites.
 func TestMapGoogleAPIError_QuotaProject403(t *testing.T) {
 	t.Parallel()
@@ -73,6 +73,9 @@ func TestMapGoogleAPIError_Plain403KeepsPropertySuggestion(t *testing.T) {
 	}
 	if !strings.Contains(got.Suggestion, "property owner") {
 		t.Errorf("suggestion = %q, want the property-owner advice", got.Suggestion)
+	}
+	if strings.Contains(got.Suggestion, "service account") {
+		t.Errorf("403 suggestion must not assume a service-account identity: %q", got.Suggestion)
 	}
 }
 

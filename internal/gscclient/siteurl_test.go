@@ -35,6 +35,8 @@ func TestNormalizeSiteURL(t *testing.T) {
 		{"https://example.com/", "https://example.com/"},
 		{"https://example.com/blog", "https://example.com/blog/"},
 		{"https://www.example.com", "sc-domain:example.com"},
+		{"WWW.example.com", "sc-domain:example.com"},
+		{"https://WWW.example.com", "sc-domain:example.com"},
 		{"https://example.com:8080/", "https://example.com:8080/"},
 		{"example.com:8080", "sc-domain:example.com"},
 		{"", ""},

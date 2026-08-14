@@ -87,7 +87,7 @@ that encode arrays as strings. Maintain this map:
 | Tool | Fields |
 |---|---|
 | `query_search_analytics` | `dimensions`, `dimension_filter_groups` |
-| `compare_periods` | `dimensions` |
+| `compare_periods` | `dimensions`, `dimension_filter_groups` |
 | `inspect_url` | `urls` |
 
 Only rewrite a value if it is a JSON string whose own contents parse as a JSON
@@ -112,7 +112,7 @@ input.
 | `dimension_filter_groups` | object[] | No | — | Full pass-through; operators below. |
 | `aggregation_type` | string | No | `auto` | `auto`, `byProperty`, `byPage`, `byNewsShowcasePanel`. |
 | `row_limit` | int | No | `150` | **1–25,000**; state it explicitly for exports. |
-| `start_row` | int | No | `0` | Pagination offset. |
+| `start_row` | int | No | `0` | Pagination offset. Applied at Google only for native `clicks desc`. Any other `sort_by`/`sort_order` scans from row 0, sorts locally, then applies the offset. |
 | `data_state` | string | No | **`all`** | `all`, `final`, `hourly_all`. |
 
 Filter operators: `equals`, `notEquals`, `contains`, `notContains`,
@@ -161,8 +161,9 @@ A server-side wrapper that calls `searchanalytics.query` twice; it is not an
 official Google API.
 
 Arguments: `site_url`, `period_a_start`, `period_a_end`, `period_b_start`,
-`period_b_end`, `dimensions`, `search_type`, `row_limit` (default 100), and
-`data_state`.
+`period_b_end`, `dimensions`, `search_type`, `dimension_filter_groups` (same
+shape and operators as `query_search_analytics`; applied to both periods),
+`row_limit` (default 100), `data_state`, `sort_by`, and `sort_order`.
 
 Each row includes A/B clicks, impressions, CTR, and position plus absolute and
 percentage deltas. Keys in only one period are retained with zero for the other
@@ -302,16 +303,22 @@ request. Service-account credentials already carry a project.
 | Condition | `service_account` | `authorized_user` (ADC) |
 |---|---|---|
 | Default | `webmasters.readonly` | Set at login time |
-| `GSC_ENABLE_WRITE=true` | Upgrade to `webmasters` | **No effect**; see below |
+| `GSC_ENABLE_WRITE=true` | Opens the local write gate **and** upgrades the requested scope to `webmasters` | Opens the local write gate only. ADC scopes stay whatever was issued at login. |
+
+`GSC_ENABLE_WRITE=true` is the **local** write gate for every credential type.
+Without it, `submit` / `delete` return `write_disabled` even if the token
+already has the `webmasters` scope. Re-logging ADC with write scope does not
+bypass this flag.
 
 ADC scopes are fixed into the refresh token by `gcloud auth
 application-default login`. Refresh grants cannot expand scopes, so a later
-`option.WithScopes` call cannot enable writes.
+`option.WithScopes` call cannot enable writes. ADC writes therefore need both
+the local flag **and** a token issued with
+`https://www.googleapis.com/auth/webmasters`.
 
-This creates a silent dead flag unless addressed. With ADC plus
-`GSC_ENABLE_WRITE=true`, write a `slog.Warn` at startup explaining that scopes
-are determined at login and the user must log in again with
-`https://www.googleapis.com/auth/webmasters`. Document this in `README.md` and
+With ADC plus `GSC_ENABLE_WRITE=true`, write a `slog.Warn` at startup explaining
+that the flag opened the local gate but ADC still needs a write-scoped token.
+Do **not** claim the flag has no effect. Document this in `README.md` and
 `INSTALL.md`, and test that the warning occurs.
 
 ADC read access requires at least:
@@ -355,7 +362,7 @@ return a full request/error body, which can include client brand terms in
 |---|---|
 | `invalid_input` | Argument or constraint validation fails. |
 | `auth_failed` | 401. |
-| `permission_denied` | 403; for example, the service account lacks the property. |
+| `permission_denied` | 403; for example, the credential lacks the property. |
 | `not_found` | 404. |
 | `quota_exceeded` | 429, including after retry/backoff is exhausted. |
 | `upstream_error` | 5xx, including after retry/backoff is exhausted, or an unparsable response. |

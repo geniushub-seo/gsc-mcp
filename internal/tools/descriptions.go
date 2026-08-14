@@ -5,7 +5,7 @@ package tools
 // Search Analytics tools (PT timezone, 2–4 day delay, 16-month retention).
 
 const (
-	descListSites = "List all Google Search Console properties the service account can access. " +
+	descListSites = "List all Google Search Console properties the authenticated credentials can access. " +
 		"Returns site_url and permission_level for each property (including sc-domain: forms). " +
 		"Call this first when you are unsure which property format to use for other tools. " +
 		"Search Analytics dates are in PT timezone, data is typically delayed 2–4 days (recent dates may be incomplete), and history is retained about 16 months."
@@ -40,6 +40,7 @@ const (
 		"ctr_change_pct is relative percent change of CTR. " +
 		"position_change is B−A (negative means ranking improved because lower position numbers are better); position_improved is true when B < A. " +
 		"Keys only in one period have only_in='a'|'b' and omit position_change/position_improved (missing side is not a rank of 0). " +
+		"dimension_filter_groups apply to both periods (same operators as query_search_analytics, including excludingRegex for non-brand). " +
 		"Rows are sorted by sort_by before truncation: clicks_delta desc (default) for biggest gains, clicks_delta asc for biggest drops, position_change asc for biggest rank improvements. " +
 		"This matters because the GSC API can only order by clicks, and rank movement is uncorrelated with click volume — asking for 'biggest rank improvement' without sort_by would return whichever high-click rows happened to come back. " +
 		"Both periods are therefore scanned to 25,000 rows before joining, which makes this tool slower than query_search_analytics on large properties. " +

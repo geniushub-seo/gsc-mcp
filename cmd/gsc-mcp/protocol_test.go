@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/geniushub-seo/gsc-mcp/internal/config"
 	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/api/option"
 )
 
@@ -208,6 +208,44 @@ func TestProtocol_StringifiedDimensionsMiddleware(t *testing.T) {
 		t.Fatalf("protocol error (coercion may have failed): %v", err)
 	}
 	// Expect tool-level error (no real creds/endpoint), not a panic.
+	if result == nil {
+		t.Fatal("nil result")
+	}
+}
+
+func TestProtocol_StringifiedComparePeriodsFilterGroups(t *testing.T) {
+	ctx := context.Background()
+	client, err := gscclient.New(ctx, config.Config{}, option.WithoutAuthentication())
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := newServer(client, config.Config{})
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := srv.Connect(ctx, st, nil); err != nil {
+		t.Fatal(err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "t", Version: "t"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "compare_periods",
+		Arguments: map[string]any{
+			"site_url":                "sc-domain:example.com",
+			"period_a_start":          "2026-06-01",
+			"period_a_end":            "2026-06-28",
+			"period_b_start":          "2026-07-01",
+			"period_b_end":            "2026-07-28",
+			"dimensions":              `["query"]`,
+			"dimension_filter_groups": `[{"groupType":"and","filters":[{"dimension":"query","operator":"excludingRegex","expression":"brand"}]}]`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("protocol error (filter-group coercion may have failed): %v", err)
+	}
 	if result == nil {
 		t.Fatal("nil result")
 	}

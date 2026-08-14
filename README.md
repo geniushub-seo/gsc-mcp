@@ -15,36 +15,92 @@ Built for SEO and content teams. Sign in once with your own Google account (ADC)
 
 ## Install
 
-**macOS / Linux**
+### Before you start
+
+The binary is only one part of the setup. You also need:
+
+- A Google account that can already see at least one property in
+  [Search Console](https://search.google.com/search-console). If it cannot,
+  ask the property owner for access before expecting `list_sites` to return a
+  usable site.
+- A GCP project where you can enable the Search Console API. If you do not have
+  one, [create a project](https://console.cloud.google.com/projectcreate), copy
+  its **project ID** (not its display name), then enable the
+  [Search Console API](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com)
+  in that project.
+- The Google Cloud CLI. Check with `gcloud --version`; if it is missing, install
+  it using the platform instructions under **Doing it by hand** below.
+- The MCP client you intend to use. Adding an MCP server does not inject tools
+  into an already-running session; restart the client or start a new session
+  after configuration.
+
+The browser sign-in is an intentional human-in-the-loop checkpoint, but it is
+**not a terminal handoff**. During an agent-assisted installation, the agent
+executes every terminal command, including starting gcloud login and keeping it
+running. The user only chooses a Google account and approves access in the
+browser page that opens; the agent then continues automatically.
+
+The command blocks below are manual-installation references. When an AI agent
+is helping, the agent runs them; it must not ask a novice user to open Terminal
+or copy shell commands.
+
+### macOS / Linux
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.sh | bash
 gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
 gcloud auth application-default set-quota-project YOUR_PROJECT_ID
-gsc-mcp setup
+"$HOME/.local/bin/gsc-mcp" doctor
+"$HOME/.local/bin/gsc-mcp" setup
 ```
 
-**Windows (PowerShell)**
+### Windows (PowerShell)
 
 ```powershell
 irm https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.ps1 | iex
 gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
 gcloud auth application-default set-quota-project YOUR_PROJECT_ID
-gsc-mcp setup
+$GscMcp = Join-Path $env:LOCALAPPDATA 'Programs\gsc-mcp\gsc-mcp.exe'
+& $GscMcp doctor
+& $GscMcp setup
 ```
 
-The install script downloads the binary for your platform, verifies its SHA-256, and installs it to `~/.local/bin` (`%LOCALAPPDATA%\Programs\gsc-mcp` on Windows), clearing the macOS quarantine flag or the Windows SmartScreen block marker. The other three lines you run yourself — they open a browser and write your MCP config. See [INSTALL.md](INSTALL.md) and [Releases](https://github.com/geniushub-seo/gsc-mcp/releases).
+The install script downloads the binary for your platform, verifies its SHA-256, and installs it to `~/.local/bin` (`%LOCALAPPDATA%\Programs\gsc-mcp` on Windows), clearing the macOS quarantine flag or the Windows SmartScreen block marker. In an agent-assisted flow, the agent starts ADC login and the user only handles Google's browser consent; `doctor` verifies credentials without writing files; `setup` writes only the client configurations it explicitly reports. See [INSTALL.md](INSTALL.md) and [Releases](https://github.com/geniushub-seo/gsc-mcp/releases).
+
+The commands above use the installed binary's absolute path so they still work
+when the install directory is not on `PATH`. If `command -v gsc-mcp` (or
+`Get-Command gsc-mcp` on Windows) succeeds, the shorter `gsc-mcp` command is
+also fine.
 
 Replace `YOUR_PROJECT_ID` with the GCP project where you enabled the Search Console API. **Do not skip that line.** ADC is your personal account and belongs to no project, so without a quota project every query fails with a 403 that reads exactly like a permissions problem and isn't one.
 
-If any step misbehaves, run `gsc-mcp doctor`: every check plus one real `list_sites` call, and it writes no files.
+If any step misbehaves, run the installed binary with `doctor` (for example,
+`"$HOME/.local/bin/gsc-mcp" doctor`): every check plus one real `list_sites`
+call, and it writes no files.
+
+### Handoff and next steps
+
+| State | Who acts | Completion evidence | Next step |
+|---|---|---|---|
+| Prerequisites | Agent; user only supplies choices it cannot infer | `gcloud --version` works; a real project ID is known; the Google account has GSC access | Agent installs the binary |
+| Binary installed | Agent | The absolute binary path runs | Agent starts ADC login |
+| Browser authorization | Agent runs the process; **user only clicks in Google UI** | The browser flow finishes and ADC is saved | Agent sets the quota project |
+| Credentials ready | Agent | `doctor` prints `list_sites OK` and a property count | Agent configures the chosen MCP client |
+| Client configured | Agent | The client lists a `gsc` MCP server | Restart the client or start a new session |
+| Tools loaded | Agent | `list_sites` is visible and returns properties | Begin GSC analysis |
+
+If a step fails, stay at that row and apply the corrective instruction from
+`doctor`; do not report later rows as complete.
 
 ## Getting started with ADC (recommended)
 
 Sign in once with your own Google account. Your MCP config needs **no** credential env vars at all.
 
-Easiest path: run the lines above. Or hand the repo to an AI agent and say: install this for me, follow [INSTALL.md](INSTALL.md) — that file is written for agents, and [AGENTS.md](AGENTS.md) tells it how to use the tools once they are installed.
+Easiest manual path: run the lines above. With an AI agent, say: install this
+for me and follow [INSTALL.md](INSTALL.md). The agent owns every terminal
+command. Your only OAuth task is approving access in the Google browser page it
+opens.
 
 ### Doing it by hand (after the binary is installed)
 
@@ -53,11 +109,14 @@ Easiest path: run the lines above. Or hand the repo to an AI agent and say: inst
    - Linux: `curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-latest-linux-x86_64.tar.gz && tar -xf google-cloud-cli-latest-linux-x86_64.tar.gz && ./google-cloud-sdk/install.sh` (or your distro's `google-cloud-sdk` package)
    - Windows: `winget install Google.CloudSDK`, or download [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe)
    - **Warning:** do not just unpack the tarball without running `install.sh`. The bundled Python never gets installed, the launcher falls back to your system `python3` (macOS ships 3.9; gcloud needs 3.10–3.14), and the resulting error looks like a bug in this project. That 713 MB is the Google Cloud SDK, not gsc-mcp.
-2. **Enable the Search Console API** if you haven't: hit Enable in the [API Library](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com). Check the project picker top-left first, and note that project's ID (the lowercase string, not the display name).
-3. **Sign in with ADC** (opens a browser) — the second command above.
-4. **Set the quota project** — the third command above. Required under ADC; skipping it means a 403 on every query.
-5. **Run `gsc-mcp setup`** — merges your MCP config and test-calls `list_sites`.
-6. Call `list_sites` from your agent to confirm which properties you can see.
+2. **Create or select a GCP project.** If none exists, use the [project creation page](https://console.cloud.google.com/projectcreate). Copy the project ID, not the display name. You need permission to enable APIs and use that project for quota; otherwise ask its administrator.
+3. **Enable the Search Console API** if you haven't: hit Enable in the [API Library](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com). Check the project picker top-left first.
+4. **Confirm GSC access.** Open [Search Console](https://search.google.com/search-console) with the same Google account and confirm that at least one property is visible.
+5. **Sign in with ADC** (opens a browser) — during agent-assisted setup, the agent runs the login command and waits; the user only completes Google's browser consent.
+6. **Set the quota project** — the agent replaces `YOUR_PROJECT_ID` with the ID from step 2 and runs the command. Required under ADC; skipping it means a 403 on every query.
+7. **Run `gsc-mcp doctor`** — the agent runs it and requires an explicit `list_sites OK` line. Do not infer success only from the presence of the credential file.
+8. **Run `gsc-mcp setup`** — the agent runs it, then finishes the client-specific step below. `setup` can merge Claude Desktop, Cursor, and an existing project `.mcp.json`; it prints manual instructions for clients it does not configure directly.
+9. Restart the MCP client or start a new session, then call `list_sites` from the agent.
 
 If something breaks, run `gsc-mcp doctor`. It runs every check plus one real `list_sites` call, **writes no files**, and prints the specific fix for what it finds — a missing quota project, an expired token, and a disabled API each get their own instructions. `setup --dry-run` skips the API call entirely, so it cannot tell you whether your credentials work; don't use it to diagnose.
 
@@ -84,9 +143,12 @@ gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
 ```
 
-### Writes (sitemap submit/delete) under ADC
+### Writes (sitemap submit/delete)
 
-**`GSC_ENABLE_WRITE=true` does nothing under ADC.** An ADC token's OAuth scopes are fixed at `gcloud auth application-default login` time and cannot be widened afterwards. To write, sign in again with:
+Two independent gates. Both are required for ADC:
+
+1. Set `GSC_ENABLE_WRITE=true`. This is a local gsc-mcp gate and applies to **every** credential type, including ADC. Re-logging with write scope is not enough on its own.
+2. ADC tokens also need the `webmasters` scope at login time (scopes cannot be widened later):
 
 ```bash
 gcloud auth application-default login \
@@ -102,8 +164,8 @@ gcloud auth application-default login \
 | `GOOGLE_APPLICATION_CREDENTIALS` | — | Official ADC path override (precedence 2) |
 | `GOOGLE_SERVICE_ACCOUNT_FILE` | — | Path to a service account key (precedence 3) |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | — | Inline JSON (precedence 4, handy in CI) |
-| `GSC_ENABLE_WRITE` | `false` | **Service account only**: upgrades the scope to `webmasters` and allows `submit`. Warns and does nothing under ADC |
-| `GSC_ALLOW_DESTRUCTIVE` | `false` | Allows `delete`; requires `GSC_ENABLE_WRITE=true` as well (service account) |
+| `GSC_ENABLE_WRITE` | `false` | Local write gate for `submit` (all credential types). Service accounts also upgrade the requested scope to `webmasters`. ADC still needs a `webmasters` token from login. |
+| `GSC_ALLOW_DESTRUCTIVE` | `false` | Allows `delete`; requires `GSC_ENABLE_WRITE=true` as well (all credential types) |
 | `GSC_REQUEST_TIMEOUT` | `30s` | Timeout for a single API call |
 | `GSC_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 
@@ -146,11 +208,25 @@ Clone the repo when you want an agent to get its own project configuration and g
 | Agent | Native repo files | What to do |
 |---|---|---|
 | Claude Code | `.mcp.json`, `.claude-plugin/`, `.agents/skills/` | Open the repo or install the plugin. |
-| Codex | `AGENTS.md`, `.agents/skills/` | Start Codex from the repo root. |
+| Codex | `AGENTS.md`, `.agents/skills/`; MCP config is separate | Run `codex mcp add` below, then restart Codex or start a new session. |
 | Cursor | `.cursor/mcp.json`, `.cursor/rules/gsc-mcp.mdc` | Open the repo as a project. |
-| Hermes | no repo-local discovery | Merge the short `mcp_servers.gsc` entry in [INSTALL.md](INSTALL.md) into `~/.hermes/config.yaml`. |
+| Hermes | [`.hermes/`](.hermes/) onboarding bundle | Run `bash .hermes/setup.sh`, then start a new Hermes session. |
 
-For every client, run `gsc-mcp doctor`, then ask the agent to call `list_sites`. Never put an OAuth token or service-account key in these files.
+For every client, the assisting agent runs `gsc-mcp doctor`, then calls
+`list_sites`. Never put an OAuth token or service-account key in these files.
+
+For Codex, `.mcp.json` is not the MCP configuration file. Codex uses
+`~/.codex/config.toml`, a trusted project's `.codex/config.toml`, or the CLI:
+
+```bash
+codex mcp list
+# Only when the first list does not contain gsc:
+codex mcp add gsc -- "$HOME/.local/bin/gsc-mcp"
+codex mcp list
+```
+
+After the second `list` shows `gsc`, restart Codex or open a new session before
+asking it to call `list_sites`.
 
 ## Skills (analyses that work out of the box)
 

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/geniushub-seo/gsc-mcp/internal/config"
 	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/api/option"
 	"google.golang.org/api/searchconsole/v1"
 )
@@ -235,8 +235,8 @@ func TestQuerySearchAnalytics_DefaultRowLimit150(t *testing.T) {
 	if err := json.Unmarshal(gotBody, &got); err != nil {
 		t.Fatalf("unmarshal body: %v", err)
 	}
-	if got.RowLimit != 150 {
-		t.Fatalf("rowLimit in request = %d, want 150", got.RowLimit)
+	if got.RowLimit != 151 {
+		t.Fatalf("rowLimit in request = %d, want 151 (default 150 plus a truncation peek)", got.RowLimit)
 	}
 }
 

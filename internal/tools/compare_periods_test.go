@@ -3,12 +3,14 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
+	"google.golang.org/api/searchconsole/v1"
 )
 
 func f64ptr(v float64) *float64 { return &v }
@@ -324,6 +326,116 @@ func TestComparePeriodsSchema_LabelsBaselineAndCurrent(t *testing.T) {
 	for _, want := range []string{"baseline", "current", "B minus A"} {
 		if !strings.Contains(schema, want) {
 			t.Errorf("schema missing %q", want)
+		}
+	}
+}
+
+func TestValidateComparePeriods_AcceptsDimensionFilterGroups(t *testing.T) {
+	t.Parallel()
+	out, err := validateComparePeriods(comparePeriodsInput{
+		SiteURL:      "example.com",
+		PeriodAStart: "2026-06-01",
+		PeriodAEnd:   "2026-06-28",
+		PeriodBStart: "2026-07-01",
+		PeriodBEnd:   "2026-07-28",
+		DimensionFilterGroups: []DimensionFilterGroup{{
+			GroupType: "and",
+			Filters: []DimensionFilter{{
+				Dimension:  "query",
+				Operator:   "excludingRegex",
+				Expression: "(?i)brand",
+			}},
+		}},
+	})
+	if err.Code != "" {
+		t.Fatalf("unexpected error: %+v", err)
+	}
+	if len(out.DimensionFilterGroups) != 1 {
+		t.Fatalf("filter groups = %d, want 1", len(out.DimensionFilterGroups))
+	}
+	f := out.DimensionFilterGroups[0].Filters[0]
+	if f.Dimension != "QUERY" || f.Operator != "EXCLUDING_REGEX" || f.Expression != "(?i)brand" {
+		t.Errorf("normalized filter = %+v", f)
+	}
+}
+
+func TestValidateComparePeriods_RejectsInvalidFilter(t *testing.T) {
+	t.Parallel()
+	_, err := validateComparePeriods(comparePeriodsInput{
+		SiteURL:      "example.com",
+		PeriodAStart: "2026-06-01",
+		PeriodAEnd:   "2026-06-28",
+		PeriodBStart: "2026-07-01",
+		PeriodBEnd:   "2026-07-28",
+		DimensionFilterGroups: []DimensionFilterGroup{{
+			Filters: []DimensionFilter{{
+				Dimension:  "query",
+				Operator:   "lookaround",
+				Expression: "brand",
+			}},
+		}},
+	})
+	if err.Code != gscclient.ErrInvalidInput {
+		t.Fatalf("expected invalid_input, got %+v", err)
+	}
+}
+
+func TestComparePeriods_FilterGroupsInBothRequestBodies(t *testing.T) {
+	t.Parallel()
+	var bodies [][]byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/searchAnalytics/query") {
+			body, _ := io.ReadAll(r.Body)
+			bodies = append(bodies, body)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"rows": []map[string]any{
+					{"keys": []string{"q"}, "clicks": 10, "impressions": 100, "ctr": 0.1, "position": 5},
+				},
+			})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	client := newTestClient(t, srv.URL+"/")
+	result, _, err := comparePeriods(context.Background(), client, comparePeriodsInput{
+		SiteURL:      "sc-domain:example.com",
+		PeriodAStart: "2026-06-01",
+		PeriodAEnd:   "2026-06-28",
+		PeriodBStart: "2026-07-01",
+		PeriodBEnd:   "2026-07-28",
+		Dimensions:   []string{"query"},
+		DimensionFilterGroups: []DimensionFilterGroup{{
+			GroupType: "and",
+			Filters: []DimensionFilter{{
+				Dimension:  "query",
+				Operator:   "excludingRegex",
+				Expression: "(?i)brand",
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Go error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool error: %s", extractText(t, result.Content))
+	}
+	if len(bodies) != 2 {
+		t.Fatalf("expected 2 period requests, got %d", len(bodies))
+	}
+	for i, raw := range bodies {
+		var got searchconsole.SearchAnalyticsQueryRequest
+		if err := json.Unmarshal(raw, &got); err != nil {
+			t.Fatalf("period %d unmarshal: %v", i, err)
+		}
+		if len(got.DimensionFilterGroups) != 1 || len(got.DimensionFilterGroups[0].Filters) != 1 {
+			t.Fatalf("period %d missing filter groups: %s", i, raw)
+		}
+		f := got.DimensionFilterGroups[0].Filters[0]
+		if f.Operator != "EXCLUDING_REGEX" || f.Dimension != "QUERY" || f.Expression != "(?i)brand" {
+			t.Errorf("period %d filter = %+v", i, f)
 		}
 	}
 }

@@ -25,23 +25,73 @@ curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.
 irm https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.ps1 | iex
 ```
 
-Then print the following commands for the user to run themselves. They open a
-browser:
+Do not jump directly from binary installation to OAuth. First establish these
+facts without reading credential contents:
+
+1. Which MCP client the user wants to configure.
+2. Whether `gcloud --version` works. If not, follow [INSTALL.md](INSTALL.md)
+   step 1a before continuing.
+3. The real GCP project ID where the Search Console API is enabled. If the user
+   has no project, direct them to https://console.cloud.google.com/projectcreate,
+   then to https://console.cloud.google.com/apis/library/searchconsole.googleapis.com.
+4. Whether the same Google account can see at least one property at
+   https://search.google.com/search-console. An empty account is not an MCP
+   installation problem.
+
+### Browser consent checkpoint: agent owns the terminal
+
+The agent must execute every shell / PowerShell command. Never tell a novice
+user to open Terminal, copy a command, or paste terminal output back into chat.
+Before starting OAuth, tell the user that a Google sign-in page will open and
+that their only task is to choose an account and approve access. Then run this
+command yourself through the terminal tool with enough time for browser
+consent:
 
 ```bash
 gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
-gcloud auth application-default set-quota-project YOUR_PROJECT_ID
-gsc-mcp setup
 ```
 
-Run `gsc-mcp doctor` after installation. See [INSTALL.md](INSTALL.md) for the
-full procedure.
+Keep the command running while the user completes Google's browser UI. The
+human owns the consent click; the agent owns command entry, process management,
+and every follow-up command. When the command exits successfully, confirm the
+credential file exists with `ls`, never `cat`, then run the following commands
+yourself:
 
-### Four common mistakes
+```bash
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+"$HOME/.local/bin/gsc-mcp" doctor
+"$HOME/.local/bin/gsc-mcp" setup
+```
 
-1. **Running browser-based login for the user.** Print the command and wait for
-   the user to report completion.
+On Windows, use the absolute path printed by `install.ps1`. On POSIX, the
+absolute path above avoids a false `command not found` when `~/.local/bin` is
+not yet on `PATH`. Replace `YOUR_PROJECT_ID`; never send the placeholder.
+
+`doctor` must print `list_sites OK` before configuration is considered usable.
+After `setup`, finish the selected client's configuration, restart that client
+or open a new session, and verify that its MCP server list contains `gsc`.
+Only then ask the agent to call `list_sites`. See [INSTALL.md](INSTALL.md) for
+the full client-specific procedure.
+
+For Codex, do not use the repository `.mcp.json`; Codex MCP configuration lives
+in `~/.codex/config.toml` or a trusted project's `.codex/config.toml`. The safe
+CLI path is:
+
+```bash
+codex mcp list
+# Only when the first list does not contain gsc:
+codex mcp add gsc -- "$HOME/.local/bin/gsc-mcp"
+codex mcp list
+```
+
+The current Codex session will not gain the new tool. Restart Codex or start a
+new session after `gsc` appears in the list.
+
+### Six common mistakes
+
+1. **Sending the user to Terminal for OAuth.** The agent starts the login
+   command; the user interacts only with the Google page that opens.
 2. **Skipping `set-quota-project`.** ADC belongs to a personal account, not a
    GCP project; without this command every query returns 403.
 3. **Downloading a Windows executable manually.** Use `install.ps1`: a manual
@@ -49,6 +99,11 @@ full procedure.
    lands outside PATH.
 4. **Printing credential contents.** Use `ls` only to confirm a file exists;
    never use `cat` or paste credentials into chat.
+5. **Stopping after printing an OAuth command.** Keep the terminal process
+   alive, wait for browser consent, then continue automatically from
+   quota-project setup.
+6. **Assuming a running client hot-loads MCP configuration.** Verify the server
+   list, then restart or open a new session before calling `list_sites`.
 
 ### Use `gsc-mcp doctor`, not hand-written JSON-RPC, for verification
 
@@ -139,8 +194,10 @@ accessible property; show that list to the user rather than guessing.
 The tool remains visible in `tools/list` when flags are absent, but write calls
 return `write_disabled` without calling the API.
 
-**ADC note:** `GSC_ENABLE_WRITE=true` cannot add scopes to an existing ADC
-token. To write, re-run login using `webmasters`, not `webmasters.readonly`.
+**ADC note:** `GSC_ENABLE_WRITE=true` is still required as the local write
+gate, even after re-login with write scope. The flag cannot add scopes to an
+existing ADC token, so writes also need a token issued with `webmasters`, not
+`webmasters.readonly`.
 
 ### Included skills
 
@@ -161,9 +218,9 @@ recognizes. Do not duplicate these instructions or add credentials to the repo.
 | Agent | Automatically read content |
 |---|---|
 | Claude Code | `.mcp.json`, `.claude-plugin/`, and the plugin's `.agents/skills/` |
-| Codex | This root `AGENTS.md` and `.agents/skills/` |
+| Codex | This root `AGENTS.md` and `.agents/skills/`; MCP itself must be added through Codex `config.toml` or `codex mcp add` |
 | Cursor | `.cursor/mcp.json` and `.cursor/rules/gsc-mcp.mdc` |
-| Hermes | Hermes reads only the user's `~/.hermes/config.yaml`; merge the snippet in [INSTALL.md](INSTALL.md). It has no automatically discovered repo-local directory. |
+| Hermes | Run `bash .hermes/setup.sh`; it uses `hermes mcp add/test` to update the active profile, then requires a new session |
 
 For any agent, the first real query should be `list_sites` when the property is
 not unambiguous. Never guess a property or read or print credentials.
@@ -180,7 +237,7 @@ Diagnose the symptom first instead of inferring a cause.
 | `auth_failed` containing `cannot fetch token` or `invalid_grant` | Refresh token expired | Reinstall the binary | Re-run `application-default login` |
 | `gcloud projects list` says credentials expired immediately after ADC login | It uses a separate token | Re-run `application-default login` | Run `gcloud auth login` |
 | Windows says `gcloud` is not recognized | Installed but absent from PATH | Re-run `winget install` | Use `%LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd` |
-| `submit` / `delete` rejected | Write flag absent or ADC scope is read-only | Set `GSC_ENABLE_WRITE=true` for ADC | See **Writes are disabled by default** |
+| `submit` / `delete` rejected | Local write gate closed, or ADC token is still readonly | Skip `GSC_ENABLE_WRITE=true` after re-login | Set `GSC_ENABLE_WRITE=true` **and** re-login with `webmasters` if using ADC |
 | A query is empty despite known traffic | Date range is in the 2–4 day lag or outside retention | Diagnose permissions | Move `end_date` back several days |
 
 `gcloud auth login` and `gcloud auth application-default login` store separate

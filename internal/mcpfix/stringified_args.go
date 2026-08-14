@@ -15,7 +15,7 @@ import (
 // to repair.
 var toolArrayFields = map[string][]string{
 	"query_search_analytics": {"dimensions", "dimension_filter_groups"},
-	"compare_periods":        {"dimensions"},
+	"compare_periods":        {"dimensions", "dimension_filter_groups"},
 	"inspect_url":            {"urls"},
 }
 

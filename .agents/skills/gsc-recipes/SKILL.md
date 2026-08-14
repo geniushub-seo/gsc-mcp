@@ -15,6 +15,7 @@ Other GSC servers ship a separate tool per preset (`get_performance_overview`, `
 - **`data_state`**: leave unset. The default `all` matches what the user sees in the Search Console UI. Setting `final` will make your numbers disagree with their dashboard.
 - **`site_url`**: pass whatever the user said — bare domain, full URL, or `sc-domain:`. It is normalised, and a 403 triggers automatic property discovery. Call `list_sites` first only if the user has several properties and you cannot tell which they mean.
 - **`row_limit`**: 1000 is plenty for analysis. The 25,000 ceiling is for exports.
+- **Completeness**: every analytics response includes `truncated`, `scan_capped`, and `ordering`. Read them. `truncated=true` means more rows exist beyond `row_limit`. `scan_capped=true` means the 25,000-row scan was incomplete, so a top-N by a non-clicks key can be missing candidates.
 
 ## Recipes
 
@@ -90,7 +91,7 @@ compare_periods
   period_b_*: the recent window
   dimensions: ["query"]     or ["page"]
 ```
-Returns both periods plus deltas. Keep both windows the same length — comparing 28 days against a calendar month mixes 4-weekend and 5-weekend periods and invents swings.
+Returns both periods plus deltas. Keep both windows the same length — comparing 28 days against a calendar month mixes 4-weekend and 5-weekend periods and invents swings. Pass `dimension_filter_groups` (same shape as `query_search_analytics`) to compare a filtered slice such as non-brand. For biggest losses use `sort_by: clicks_delta` and `sort_order: asc`; a single default desc call is not both winners and losers.
 
 ### "Which images / videos / news?"
 
@@ -159,6 +160,7 @@ These are rejected before the request leaves, with an explanatory message — yo
 ## Reading the numbers honestly
 
 - **Average position is a weighted average** across all impressions for that row. It is not "this keyword ranks 4th". A query appearing at position 2 in one country and 20 in another averages to 11, a position it never actually held.
+- **Always read `truncated`, `scan_capped`, and `ordering`.** Do not treat a top-N as complete when either flag is true.
 - **Rows are top rows only.** Category totals will not sum to the site total. If you show both, say so.
 - **Impressions moving while clicks hold still** usually means a position or SERP-layout change, not a content problem. Check position before recommending a rewrite.
 - **CTR is `clicks / impressions`** for that row — comparing CTR across very different positions is meaningless without a position-matched baseline.

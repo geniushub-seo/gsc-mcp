@@ -54,6 +54,129 @@ func TestMergeMCPConfigFile_PreservesExistingServers(t *testing.T) {
 	}
 }
 
+func TestMergeMCPConfigFile_NullRootIsError(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp.json")
+	original := `null`
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := MergeMCPConfigFile(path, "gsc", "/new/gsc-mcp", true)
+	if err == nil {
+		t.Fatal("expected error when the document root is JSON null")
+	}
+	if !strings.Contains(err.Error(), "not an object") {
+		t.Fatalf("error = %v, want root not an object", err)
+	}
+	got, _ := os.ReadFile(path)
+	if string(got) != original {
+		t.Fatalf("file must be unchanged on merge error; got %s", got)
+	}
+
+	_, _, err = MergeMCPConfigFile(path, "gsc", "/new/gsc-mcp", false)
+	if err == nil {
+		t.Fatal("expected error on non-dry-run null root")
+	}
+	got, _ = os.ReadFile(path)
+	if string(got) != original {
+		t.Fatalf("non-dry-run must not write a null root; got %s", got)
+	}
+}
+
+func TestMergeMCPConfigFile_NonObjectMCPServersIsError(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp.json")
+	original := `{"mcpServers":["not","an","object"]}`
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := MergeMCPConfigFile(path, "gsc", "/new/gsc-mcp", false)
+	if err == nil {
+		t.Fatal("expected error when mcpServers is not an object")
+	}
+	if !strings.Contains(err.Error(), "mcpServers") || !strings.Contains(err.Error(), "not an object") {
+		t.Fatalf("error = %v, want mcpServers not an object", err)
+	}
+	got, _ := os.ReadFile(path)
+	if string(got) != original {
+		t.Fatalf("file must be unchanged on merge error; got %s", got)
+	}
+}
+
+func TestMergeMCPConfigFile_NonObjectGSCEntryIsError(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp.json")
+	original := `{"mcpServers":{"gsc":"custom-wrapper"}}`
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := MergeMCPConfigFile(path, "gsc", "/new/gsc-mcp", false)
+	if err == nil {
+		t.Fatal("expected error when gsc entry is not an object")
+	}
+	if !strings.Contains(err.Error(), "mcpServers.gsc") || !strings.Contains(err.Error(), "not an object") {
+		t.Fatalf("error = %v, want mcpServers.gsc not an object", err)
+	}
+	got, _ := os.ReadFile(path)
+	if string(got) != original {
+		t.Fatalf("file must be unchanged on merge error; got %s", got)
+	}
+}
+
+func TestMergeMCPConfigFile_PreservesExistingGSCFields(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mcp.json")
+	original := `{
+  "mcpServers": {
+    "gsc": {
+      "command": "/old/gsc-mcp",
+      "args": ["--log-level", "debug"],
+      "env": {
+        "GOOGLE_SERVICE_ACCOUNT_FILE": "/secret/sa.json",
+        "GSC_LOG_LEVEL": "debug"
+      },
+      "supports_parallel_tool_calls": false
+    }
+  }
+}
+`
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	merged, _, err := MergeMCPConfigFile(path, "gsc", "/new/gsc-mcp", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var root map[string]any
+	if err := json.Unmarshal(merged, &root); err != nil {
+		t.Fatal(err)
+	}
+	gsc := root["mcpServers"].(map[string]any)["gsc"].(map[string]any)
+	if gsc["command"] != "/new/gsc-mcp" {
+		t.Fatalf("command = %v, want /new/gsc-mcp", gsc["command"])
+	}
+	args, _ := gsc["args"].([]any)
+	if len(args) != 2 || args[0] != "--log-level" || args[1] != "debug" {
+		t.Fatalf("args were not preserved: %#v", gsc["args"])
+	}
+	env, _ := gsc["env"].(map[string]any)
+	if env["GOOGLE_SERVICE_ACCOUNT_FILE"] != "/secret/sa.json" || env["GSC_LOG_LEVEL"] != "debug" {
+		t.Fatalf("env was not preserved: %#v", gsc["env"])
+	}
+	if gsc["supports_parallel_tool_calls"] != false {
+		t.Fatalf("client-specific field dropped: %#v", gsc)
+	}
+}
+
 func TestMergeMCPConfigFile_DryRunDoesNotWrite(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -169,9 +292,10 @@ func TestRun_GcloudExistsButFails(t *testing.T) {
 	}
 }
 
-// runCapture runs setup with a temp binary path and returns everything logged.
-// DryRun is forced on so no test can touch the developer's real MCP configs.
-func runCapture(t *testing.T, opts Options) string {
+// runCapture runs setup with a temp binary path and returns everything logged
+// plus the Run error. DryRun is forced on so no test can touch the
+// developer's real MCP configs.
+func runCapture(t *testing.T, opts Options) (string, error) {
 	t.Helper()
 	dir := t.TempDir()
 
@@ -190,15 +314,13 @@ func runCapture(t *testing.T, opts Options) string {
 	opts.DryRun = true
 	opts.BinaryPath = bin
 	opts.Stderr = stderr
-	if _, err := Run(opts); err != nil {
-		t.Fatalf("Run returned error: %v", err)
-	}
+	_, runErr := Run(opts)
 
 	out, err := os.ReadFile(stderrPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(out)
+	return string(out), runErr
 }
 
 func TestGcloudCandidates_WindowsUsesAppDataAndCmdSuffix(t *testing.T) {
@@ -296,22 +418,139 @@ func TestLiveCheck_ChangesWhetherTheAPICallHappens(t *testing.T) {
 	// threaded through while never reaching the verify branch.
 	// An invalid inline credential makes the call fail locally, so the
 	// assertion never depends on network access or real credentials.
+	isolateCredentialEnv(t)
 	t.Setenv("GOOGLE_SERVICE_ACCOUNT_JSON", `{"type":"service_account","project_id":"x"}`)
 
 	const skipped = "skip live API call"
 
-	off := runCapture(t, Options{LiveCheck: false})
+	off, err := runCapture(t, Options{LiveCheck: false})
+	if err != nil {
+		t.Fatalf("LiveCheck=false should not fail: %v", err)
+	}
 	if !strings.Contains(off, skipped) {
 		t.Errorf("LiveCheck=false should skip the API call; got:\n%s", off)
 	}
 
-	on := runCapture(t, Options{LiveCheck: true})
+	on, err := runCapture(t, Options{LiveCheck: true})
+	if err == nil {
+		t.Fatal("LiveCheck=true with invalid credentials must return an error")
+	}
 	if strings.Contains(on, skipped) {
 		t.Errorf("LiveCheck=true must not skip the API call; got:\n%s", on)
 	}
 	if !strings.Contains(on, "list_sites") {
 		t.Errorf("LiveCheck=true should report a list_sites attempt; got:\n%s", on)
 	}
+}
+
+func TestRun_LiveCheckFailureReturnsError(t *testing.T) {
+	isolateCredentialEnv(t)
+	t.Setenv("GOOGLE_SERVICE_ACCOUNT_JSON", `{"type":"service_account","project_id":"x"}`)
+
+	out, err := runCapture(t, Options{LiveCheck: true})
+	if err == nil {
+		t.Fatal("doctor-style live check must return an error when list_sites fails")
+	}
+	if !strings.Contains(err.Error(), "live verification failed") {
+		t.Fatalf("error = %v, want live verification failed", err)
+	}
+	if strings.Contains(out, "\nDone.") || strings.HasSuffix(strings.TrimSpace(out), "Done.") {
+		t.Fatalf("live-check failure must not print Done.; got:\n%s", out)
+	}
+	if !strings.Contains(out, "Failed:") {
+		t.Fatalf("live-check failure must print Failed; got:\n%s", out)
+	}
+}
+
+func TestRun_MergeFailureReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(`{not json`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+
+	out, err := runCapture(t, Options{LiveCheck: false})
+	if err == nil {
+		t.Fatal("setup must return an error when MCP config merge fails")
+	}
+	if !strings.Contains(err.Error(), "merge MCP config") {
+		t.Fatalf("error = %v, want merge MCP config", err)
+	}
+	if strings.Contains(out, "\nDone.") || strings.HasSuffix(strings.TrimSpace(out), "Done.") {
+		t.Fatalf("merge failure must not print Done.; got:\n%s", out)
+	}
+	if !strings.Contains(out, "Failed:") {
+		t.Fatalf("merge failure must print Failed; got:\n%s", out)
+	}
+}
+
+func TestRun_SetupSkipsWriteWhenLiveFails(t *testing.T) {
+	isolateCredentialEnv(t)
+	t.Setenv("GOOGLE_SERVICE_ACCOUNT_JSON", `{"type":"service_account","project_id":"x"}`)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".mcp.json")
+	original := `{"mcpServers":{"other":{"command":"keep-me"}}}`
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+
+	stderrPath := filepath.Join(dir, "stderr.txt")
+	stderr, err := os.Create(stderrPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stderr.Close() })
+
+	bin := filepath.Join(dir, "gsc-mcp")
+	if err := os.WriteFile(bin, []byte("fake"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = Run(Options{
+		DryRun:     false,
+		LiveCheck:  false,
+		BinaryPath: bin,
+		Stderr:     stderr,
+	})
+	if err == nil {
+		t.Fatal("non-dry-run setup must return an error when live verification fails")
+	}
+	if !strings.Contains(err.Error(), "live verification failed") {
+		t.Fatalf("error = %v, want live verification failed", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != original {
+		t.Fatalf("live failure must not write MCP config; got %s", got)
+	}
+}
+
+func TestRun_MissingDefaultADCIsNotFailure(t *testing.T) {
+	isolateCredentialEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
+
+	out, err := runCapture(t, Options{LiveCheck: false})
+	if err != nil {
+		t.Fatalf("missing default ADC path must not fail dry-run setup: %v\n%s", err, out)
+	}
+}
+
+func isolateCredentialEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+	t.Setenv("GOOGLE_SERVICE_ACCOUNT_FILE", "")
+	t.Setenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
 }
 
 func TestRun_DetectsProjectMCPConfigInCwd(t *testing.T) {
@@ -323,7 +562,10 @@ func TestRun_DetectsProjectMCPConfigInCwd(t *testing.T) {
 	}
 	t.Chdir(dir)
 
-	out := runCapture(t, Options{})
+	out, err := runCapture(t, Options{})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
 	if !strings.Contains(out, "Project config found") {
 		t.Errorf("existing .mcp.json should be detected; got:\n%s", out)
 	}
@@ -335,7 +577,10 @@ func TestRun_DoesNotCreateProjectMCPConfigWhenAbsent(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 
-	out := runCapture(t, Options{})
+	out, err := runCapture(t, Options{})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
 	if !strings.Contains(out, "not in the current directory") {
 		t.Errorf("absent .mcp.json should be reported as skipped; got:\n%s", out)
 	}

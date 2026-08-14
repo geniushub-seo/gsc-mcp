@@ -107,81 +107,108 @@ func Run(opts Options) (Result, error) {
 		logf("  gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform")
 	}
 
-	// 3. MCP clients
-	logf("MCP clients:")
-	snippet := mcpServerSnippet(bin)
-
-	// Claude Code via CLI
-	if _, err := exec.LookPath("claude"); err == nil {
-		logf("  Claude Code: claude CLI found")
-		cmd := fmt.Sprintf("claude mcp add --transport stdio gsc -- %s", shellQuote(bin))
-		if opts.DryRun {
-			logf("    dry-run would run: %s", cmd)
-		} else {
-			logf("    run manually (opens nothing): %s", cmd)
-		}
-	} else {
-		logf("  Claude Code: claude CLI not found")
-	}
-
-	// Claude Desktop — path differs per OS; "" means we have no location for it.
-	if desktopPath := claudeDesktopConfigPath(); desktopPath != "" {
-		logf("  Claude Desktop config: %s", desktopPath)
-		if err := mergeMCPConfig(desktopPath, bin, opts.DryRun, logf); err != nil {
-			logf("    error: %v", err)
-		}
-	}
-
-	// Cursor
-	if home, err := os.UserHomeDir(); err == nil {
-		cursorPath := filepath.Join(home, ".cursor", "mcp.json")
-		if _, err := os.Stat(filepath.Dir(cursorPath)); err == nil {
-			logf("  Cursor config: %s", cursorPath)
-			if err := mergeMCPConfig(cursorPath, bin, opts.DryRun, logf); err != nil {
-				logf("    error: %v", err)
-			}
-		} else {
-			logf("  Cursor: config dir not found (skip)")
-		}
-	}
-
-	// Project-scoped .mcp.json (Codex, Claude Code project config, and others).
-	// Only touched when it already exists: creating one in whatever directory
-	// setup happens to run from would scatter config files around.
-	const projectConfig = ".mcp.json"
-	if _, err := os.Stat(projectConfig); err == nil {
-		abs, absErr := filepath.Abs(projectConfig)
-		if absErr != nil {
-			abs = projectConfig
-		}
-		logf("  Project config found: %s", abs)
-		if err := mergeMCPConfig(projectConfig, bin, opts.DryRun, logf); err != nil {
-			logf("    error: %v", err)
-		}
-	} else {
-		logf("  Project .mcp.json: not in the current directory (skip)")
-		logf("    If your client uses one (Codex, project-scoped Claude Code), create it there with:")
-		logf("%s", indent(snippet, "      "))
-	}
-
-	// VS Code — don't guess path
-	logf("  VS Code: path not auto-detected — paste this into your MCP settings:")
-	logf("%s", indent(snippet, "    "))
-
-	logf("Note: ADC users need no env block in MCP config — credentials come from the ADC default path.")
-
-	// 4. Live check (read-only; uses ADC default path / env; never prints secrets)
+	// 3. Live verification first. Writing MCP config before credentials work
+	// leaves clients pointing at an unusable server. Missing default ADC is
+	// not itself a failure: env / service-account JSON are still valid.
+	var liveErr error
+	needLive := opts.LiveCheck || !opts.DryRun
 	logf("verify: attempting list_sites with resolved credentials...")
 	switch {
-	case opts.DryRun && !opts.LiveCheck:
+	case !needLive:
 		logf("  dry-run: skip live API call (run `gsc-mcp doctor` to verify without writing files)")
 	default:
 		if err := verifyListSites(logf); err != nil {
 			logf("  list_sites failed: %v", err)
 			explainVerifyFailure(err, gcloudPath, logf)
+			liveErr = err
 		}
 	}
 
+	// 4. MCP clients. Skip file writes when a required live check failed.
+	var mergeErr error
+	snippet := mcpServerSnippet(bin)
+	if liveErr != nil && !opts.DryRun {
+		logf("MCP clients: skipped writes because live verification failed")
+	} else {
+		logf("MCP clients:")
+
+		// Claude Code via CLI
+		if _, err := exec.LookPath("claude"); err == nil {
+			logf("  Claude Code: claude CLI found")
+			cmd := fmt.Sprintf("claude mcp add --transport stdio gsc -- %s", shellQuote(bin))
+			if opts.DryRun {
+				logf("    dry-run would run: %s", cmd)
+			} else {
+				logf("    run manually (opens nothing): %s", cmd)
+			}
+		} else {
+			logf("  Claude Code: claude CLI not found")
+		}
+
+		// Claude Desktop — path differs per OS; "" means we have no location for it.
+		if desktopPath := claudeDesktopConfigPath(); desktopPath != "" {
+			logf("  Claude Desktop config: %s", desktopPath)
+			if err := mergeMCPConfig(desktopPath, bin, opts.DryRun, logf); err != nil {
+				logf("    error: %v", err)
+				if mergeErr == nil {
+					mergeErr = err
+				}
+			}
+		}
+
+		// Cursor
+		if home, err := os.UserHomeDir(); err == nil {
+			cursorPath := filepath.Join(home, ".cursor", "mcp.json")
+			if _, err := os.Stat(filepath.Dir(cursorPath)); err == nil {
+				logf("  Cursor config: %s", cursorPath)
+				if err := mergeMCPConfig(cursorPath, bin, opts.DryRun, logf); err != nil {
+					logf("    error: %v", err)
+					if mergeErr == nil {
+						mergeErr = err
+					}
+				}
+			} else {
+				logf("  Cursor: config dir not found (skip)")
+			}
+		}
+
+		// Project-scoped .mcp.json (Codex, Claude Code project config, and others).
+		// Only touched when it already exists: creating one in whatever directory
+		// setup happens to run from would scatter config files around.
+		const projectConfig = ".mcp.json"
+		if _, err := os.Stat(projectConfig); err == nil {
+			abs, absErr := filepath.Abs(projectConfig)
+			if absErr != nil {
+				abs = projectConfig
+			}
+			logf("  Project config found: %s", abs)
+			if err := mergeMCPConfig(projectConfig, bin, opts.DryRun, logf); err != nil {
+				logf("    error: %v", err)
+				if mergeErr == nil {
+					mergeErr = err
+				}
+			}
+		} else {
+			logf("  Project .mcp.json: not in the current directory (skip)")
+			logf("    If your client uses one (Codex, project-scoped Claude Code), create it there with:")
+			logf("%s", indent(snippet, "      "))
+		}
+
+		// VS Code — don't guess path
+		logf("  VS Code: path not auto-detected — paste this into your MCP settings:")
+		logf("%s", indent(snippet, "    "))
+
+		logf("Note: ADC users need no env block in MCP config — credentials come from the ADC default path.")
+	}
+
+	if liveErr != nil {
+		logf("Failed: live verification did not succeed.")
+		return res, fmt.Errorf("live verification failed: %w", liveErr)
+	}
+	if mergeErr != nil {
+		logf("Failed: MCP config merge did not succeed.")
+		return res, fmt.Errorf("merge MCP config: %w", mergeErr)
+	}
 	logf("Done.")
 	return res, nil
 }
@@ -465,18 +492,38 @@ func MergeMCPConfigFile(path, name, command string, dryRun bool) (merged []byte,
 		if err := json.Unmarshal(raw, &root); err != nil {
 			return nil, "", fmt.Errorf("parse %s: %w (fix JSON before re-running setup)", path, err)
 		}
+		if root == nil {
+			return nil, "", fmt.Errorf("root of %s is not an object; fix the file before re-running setup", path)
+		}
 	}
 
-	servers, _ := root["mcpServers"].(map[string]any)
-	if servers == nil {
+	var servers map[string]any
+	if raw, exists := root["mcpServers"]; exists {
+		typed, ok := raw.(map[string]any)
+		if !ok {
+			return nil, "", fmt.Errorf("mcpServers in %s is not an object; fix the file before re-running setup", path)
+		}
+		servers = typed
+	} else {
 		// Some configs use "servers" — only touch mcpServers to stay conservative.
 		servers = map[string]any{}
 		root["mcpServers"] = servers
 	}
 
-	entry := map[string]any{
-		"command": command,
+	// Update only command. Replacing the whole object would drop env, args,
+	// and any other client-specific fields the user already configured.
+	// A present non-object entry is left untouched and reported as an error.
+	var entry map[string]any
+	if raw, exists := servers[name]; exists {
+		typed, ok := raw.(map[string]any)
+		if !ok {
+			return nil, "", fmt.Errorf("mcpServers.%s in %s is not an object; fix the file before re-running setup", name, path)
+		}
+		entry = typed
+	} else {
+		entry = map[string]any{}
 	}
+	entry["command"] = command
 	servers[name] = entry
 
 	out, err := json.MarshalIndent(root, "", "  ")

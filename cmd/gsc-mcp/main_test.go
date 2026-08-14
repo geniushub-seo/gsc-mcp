@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/geniushub-seo/gsc-mcp/internal/config"
 	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/api/option"
 )
 
@@ -57,8 +57,11 @@ func TestWarnADCEnableWrite(t *testing.T) {
 	})
 
 	logs := buf.String()
-	if !strings.Contains(logs, "GSC_ENABLE_WRITE has no effect with ADC") {
-		t.Fatalf("expected ADC write warning, got %q", logs)
+	if strings.Contains(logs, "has no effect") {
+		t.Fatalf("must not claim GSC_ENABLE_WRITE has no effect with ADC, got %q", logs)
+	}
+	if !strings.Contains(logs, "local write gate") {
+		t.Fatalf("expected ADC write warning about the local gate, got %q", logs)
 	}
 	if !strings.Contains(logs, "application-default login") {
 		t.Fatalf("expected re-login guidance, got %q", logs)

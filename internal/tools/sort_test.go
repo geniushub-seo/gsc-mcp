@@ -241,8 +241,8 @@ func TestQuerySearchAnalytics_NativeSortDoesNotOverFetch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("querySearchAnalytics: %v", err)
 	}
-	if gotRowLimit != 25 {
-		t.Errorf("request rowLimit = %d, want 25 (no over-fetch on the default ordering)", gotRowLimit)
+	if gotRowLimit != 26 {
+		t.Errorf("request rowLimit = %d, want 26 (native clicks-desc peeks one extra row)", gotRowLimit)
 	}
 }
 
@@ -276,6 +276,245 @@ func TestQuerySearchAnalytics_BareDomainWithPathIsAnnounced(t *testing.T) {
 	}
 	if !strings.Contains(out.Note, "sc-domain:example.com") {
 		t.Errorf("note = %q, want it to name the property actually queried", out.Note)
+	}
+}
+
+func TestQuerySearchAnalytics_NativePeekSetsTruncated(t *testing.T) {
+	t.Parallel()
+
+	var gotRowLimit, gotStartRow int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			RowLimit int64 `json:"rowLimit"`
+			StartRow int64 `json:"startRow"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		gotRowLimit = body.RowLimit
+		gotStartRow = body.StartRow
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"rows":[
+			{"keys":["a"],"clicks":9,"impressions":90,"ctr":0.1,"position":3},
+			{"keys":["b"],"clicks":8,"impressions":80,"ctr":0.1,"position":4},
+			{"keys":["c"],"clicks":7,"impressions":70,"ctr":0.1,"position":5}
+		]}`)
+	}))
+	defer srv.Close()
+
+	res, _, err := querySearchAnalytics(context.Background(), newTestClient(t, srv.URL+"/"), querySearchAnalyticsInput{
+		SiteURL:   "sc-domain:example.com",
+		StartDate: "2026-06-15", EndDate: "2026-06-16",
+		RowLimit: 2,
+	})
+	if err != nil {
+		t.Fatalf("querySearchAnalytics: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %s", extractText(t, res.Content))
+	}
+	if gotRowLimit != 3 {
+		t.Errorf("request rowLimit = %d, want 3 (row_limit 2 + peek)", gotRowLimit)
+	}
+	if gotStartRow != 0 {
+		t.Errorf("request startRow = %d, want 0", gotStartRow)
+	}
+
+	var out querySearchAnalyticsOutput
+	if err := json.Unmarshal([]byte(extractText(t, res.Content)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if !out.Truncated {
+		t.Error("truncated = false, want true (peek row proves more data exists)")
+	}
+	if out.ScanCapped {
+		t.Error("scan_capped should be false when the API ceiling was not hit")
+	}
+	if out.RowCount != 2 || len(out.Rows) != 2 {
+		t.Fatalf("row_count = %d / len = %d, want 2", out.RowCount, len(out.Rows))
+	}
+	if out.RowsExamined != 3 {
+		t.Errorf("rows_examined = %d, want 3", out.RowsExamined)
+	}
+}
+
+func TestQuerySearchAnalytics_NativeMaxRowLimitSetsScanCapped(t *testing.T) {
+	t.Parallel()
+
+	var gotRowLimit int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			RowLimit int64 `json:"rowLimit"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		gotRowLimit = body.RowLimit
+		rows := make([]map[string]any, sortScanRowLimit)
+		for i := range rows {
+			rows[i] = map[string]any{
+				"keys": []string{fmt.Sprintf("q-%d", i)}, "clicks": sortScanRowLimit - i,
+				"impressions": 10, "ctr": 0.1, "position": 5,
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"rows": rows})
+	}))
+	defer srv.Close()
+
+	res, _, err := querySearchAnalytics(context.Background(), newTestClient(t, srv.URL+"/"), querySearchAnalyticsInput{
+		SiteURL:   "sc-domain:example.com",
+		StartDate: "2026-06-15", EndDate: "2026-06-16",
+		RowLimit: sortScanRowLimit,
+	})
+	if err != nil {
+		t.Fatalf("querySearchAnalytics: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %s", extractText(t, res.Content))
+	}
+	if gotRowLimit != sortScanRowLimit {
+		t.Errorf("request rowLimit = %d, want %d (cannot peek past the API ceiling)", gotRowLimit, sortScanRowLimit)
+	}
+
+	var out querySearchAnalyticsOutput
+	if err := json.Unmarshal([]byte(extractText(t, res.Content)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if !out.ScanCapped {
+		t.Error("scan_capped = false, want true when native path fills the 25,000 cap")
+	}
+	if out.Truncated {
+		t.Error("truncated = true, want false: we returned the full requested window")
+	}
+	if out.RowCount != sortScanRowLimit {
+		t.Errorf("row_count = %d, want %d", out.RowCount, sortScanRowLimit)
+	}
+}
+
+func TestQuerySearchAnalytics_StartRowNonNativeSortScansFromStart(t *testing.T) {
+	t.Parallel()
+
+	var gotRowLimit, gotStartRow int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			RowLimit int64 `json:"rowLimit"`
+			StartRow int64 `json:"startRow"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		gotRowLimit = body.RowLimit
+		gotStartRow = body.StartRow
+		// Clicks-desc order as Google returns it. The best rank is last.
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"rows":[
+			{"keys":["loud"],"clicks":500,"impressions":9000,"ctr":0.055,"position":9.0},
+			{"keys":["mid"],"clicks":50,"impressions":900,"ctr":0.055,"position":6.0},
+			{"keys":["best"],"clicks":1,"impressions":80,"ctr":0.0125,"position":2.0}
+		]}`)
+	}))
+	defer srv.Close()
+
+	res, _, err := querySearchAnalytics(context.Background(), newTestClient(t, srv.URL+"/"), querySearchAnalyticsInput{
+		SiteURL:   "sc-domain:example.com",
+		StartDate: "2026-06-15", EndDate: "2026-06-16",
+		Dimensions: []string{"query"},
+		RowLimit:   1,
+		StartRow:   1,
+		SortBy:     sortPosition,
+	})
+	if err != nil {
+		t.Fatalf("querySearchAnalytics: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("tool error: %s", extractText(t, res.Content))
+	}
+	if gotStartRow != 0 {
+		t.Errorf("request startRow = %d, want 0 (offset must be applied after local sort)", gotStartRow)
+	}
+	if gotRowLimit != sortScanRowLimit {
+		t.Errorf("request rowLimit = %d, want %d", gotRowLimit, sortScanRowLimit)
+	}
+
+	var out querySearchAnalyticsOutput
+	if err := json.Unmarshal([]byte(extractText(t, res.Content)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.RowCount != 1 || len(out.Rows) != 1 {
+		t.Fatalf("row_count = %d / len = %d, want 1", out.RowCount, len(out.Rows))
+	}
+	// Full set sorted by position asc is best, mid, loud. Offset 1, limit 1 → mid.
+	// Sending start_row to Google first would have dropped "loud" and returned "best".
+	if got := out.Rows[0].Keys[0]; got != "mid" {
+		t.Errorf("surviving row = %q, want mid (local sort then offset)", got)
+	}
+	if !out.Truncated {
+		t.Error("truncated = false, want true (2 rows remained after offset)")
+	}
+	if out.ScanCapped {
+		t.Error("scan_capped should be false for a 3-row fixture")
+	}
+	if out.RowsExamined != 3 {
+		t.Errorf("rows_examined = %d, want 3 (scanned candidates before start_row)", out.RowsExamined)
+	}
+}
+
+func TestApplyAnalyticsWindow_StartRowDoesNotShrinkExamined(t *testing.T) {
+	t.Parallel()
+
+	base := []querySearchAnalyticsRow{
+		{Keys: []string{"a"}, Clicks: 3, Impressions: 30, Position: f64ptr(9)},
+		{Keys: []string{"b"}, Clicks: 2, Impressions: 20, Position: f64ptr(6)},
+		{Keys: []string{"c"}, Clicks: 1, Impressions: 10, Position: f64ptr(2)},
+	}
+
+	in := querySearchAnalyticsInput{RowLimit: 1, StartRow: 1, SortBy: sortPosition, SortOrder: sortAsc}
+	rows := append([]querySearchAnalyticsRow(nil), base...)
+	out, examined, truncated, scanCapped := applyAnalyticsWindow(rows, in, false)
+	if examined != 3 {
+		t.Errorf("examined = %d, want 3", examined)
+	}
+	if !truncated {
+		t.Error("truncated = false, want true")
+	}
+	if scanCapped {
+		t.Error("scan_capped should be false")
+	}
+	if len(out) != 1 || out[0].Keys[0] != "b" {
+		t.Errorf("window = %+v, want the middle row after position sort + offset", out)
+	}
+
+	in.StartRow = 2
+	rows = append([]querySearchAnalyticsRow(nil), base...)
+	_, examined, truncated, _ = applyAnalyticsWindow(rows, in, false)
+	if examined != 3 {
+		t.Errorf("examined after last-page offset = %d, want 3", examined)
+	}
+	if truncated {
+		t.Error("truncated should be false when the post-offset page fits row_limit")
+	}
+}
+
+func TestApplyAnalyticsWindow_StartRowWithScanCap(t *testing.T) {
+	t.Parallel()
+
+	rows := make([]querySearchAnalyticsRow, sortScanRowLimit)
+	for i := range rows {
+		pos := float64(sortScanRowLimit - i)
+		rows[i] = querySearchAnalyticsRow{
+			Keys: []string{fmt.Sprintf("q-%d", i)}, Clicks: float64(i), Impressions: 10, Position: &pos,
+		}
+	}
+	in := querySearchAnalyticsInput{
+		RowLimit: 1, StartRow: sortScanRowLimit - 1, SortBy: sortPosition, SortOrder: sortAsc,
+	}
+	out, examined, truncated, scanCapped := applyAnalyticsWindow(rows, in, false)
+	if examined != sortScanRowLimit {
+		t.Errorf("examined = %d, want %d (scan size, not the leftover page)", examined, sortScanRowLimit)
+	}
+	if !scanCapped {
+		t.Error("scan_capped = false, want true")
+	}
+	if truncated {
+		t.Error("truncated should be false: only one row remains after offset")
+	}
+	if len(out) != 1 {
+		t.Fatalf("len(out) = %d, want 1", len(out))
 	}
 }
 

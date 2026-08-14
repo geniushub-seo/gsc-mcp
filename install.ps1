@@ -10,7 +10,7 @@
 #   $env:DRY_RUN = '1'; irm https://.../install.ps1 | iex
 #
 # Does NOT: run gcloud login, merge MCP config, or edit PATH.
-# After install, run the two printed follow-up commands yourself.
+# After install, an assisting agent must run the printed follow-up commands.
 #
 # PowerShell counterpart of install.sh. Keep behaviour aligned with that file.
 #
@@ -187,7 +187,8 @@ Original error: $($_.Exception.Message)
         if ($onPath) {
             Log "PATH: $InstallDir is available"
         } else {
-            Log "PATH: $InstallDir is not on your PATH. Add it with:"
+            Log "PATH: $InstallDir is not on your PATH. An assisting agent should use the absolute binary path immediately."
+            Log "Manual installers can add it with:"
             Log "  [Environment]::SetEnvironmentVariable('PATH', `"$userPath;$InstallDir`", 'User')"
             Log "  then open a new terminal"
         }
@@ -199,7 +200,13 @@ Original error: $($_.Exception.Message)
 
 Log @"
 
-Next steps (run these yourself — this script will not):
+Next steps (this installer does not run them):
+
+  With an AI agent, the agent executes every command below. The user only
+  chooses an account and approves access in the Google browser page opened by
+  gcloud; do not send the user to Terminal.
+
+  Manual installers may run:
 
   1) Sign in with Application Default Credentials (browser):
      gcloud auth application-default login ``

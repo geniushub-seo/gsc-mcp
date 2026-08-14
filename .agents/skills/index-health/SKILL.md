@@ -26,7 +26,7 @@ Report per sitemap: `path`, `last_downloaded`, `is_pending`, `warnings`, `errors
 Choose deliberately:
 
 - **User supplied a list** — use it, up to 10 at a time.
-- **User asked about the whole site** — do not guess. Pull the pages that matter with `query_search_analytics`, `dimensions: ["page"]`, `row_limit: 25`, sorted by impressions, then inspect the top 10. Explain that you sampled and why.
+- **User asked about the whole site** — do not guess. Pull the pages that matter with `query_search_analytics`, `dimensions: ["page"]`, `sort_by: impressions`, `row_limit: 25`, then inspect the top 10. Read `truncated`, `scan_capped`, and `ordering` before treating that list as complete. Explain that you sampled and why.
 - **User asked about new pages** — ask for the URLs. Pages with no impressions yet cannot be found through search analytics.
 
 ## Step 3 — Inspect
@@ -81,6 +81,7 @@ Group by what the user has to do, not by URL:
 
 ## Accuracy rules
 
+- Always read `truncated`, `scan_capped`, and `ordering` on any `query_search_analytics` sample. `truncated=true` means more pages exist; `scan_capped=true` means even the scan was incomplete.
 - **This reports what Google has stored, not the live page.** Fix a page today and this still shows the old verdict until Google recrawls. Say so whenever the data looks stale.
 - It is not a live test, does not request indexing, and does not enumerate every indexed URL. It cannot replace the Page Indexing report in the Search Console UI.
 - Quotas are per property per day; see https://developers.google.com/webmaster-tools/limits. Do not state a specific number — Google changes them.

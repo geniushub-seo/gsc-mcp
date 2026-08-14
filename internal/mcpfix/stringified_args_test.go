@@ -2,8 +2,22 @@ package mcpfix
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 )
+
+func TestToolArrayFields_ComparePeriodsIncludesFilterGroups(t *testing.T) {
+	t.Parallel()
+	fields := toolArrayFields["compare_periods"]
+	for _, want := range []string{"dimensions", "dimension_filter_groups"} {
+		if !slices.Contains(fields, want) {
+			t.Errorf("compare_periods middleware field map missing %q; got %v", want, fields)
+		}
+	}
+	if !slices.Contains(toolArrayFields["query_search_analytics"], "dimension_filter_groups") {
+		t.Error("query_search_analytics middleware field map missing dimension_filter_groups")
+	}
+}
 
 func TestCoerceStringifiedArray(t *testing.T) {
 	cases := []struct {

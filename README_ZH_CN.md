@@ -34,7 +34,7 @@ gcloud auth application-default set-quota-project YOUR_PROJECT_ID
 gsc-mcp setup
 ```
 
-安装脚本会下载对应平台的二进制文件、**校验 SHA-256**、安装到 `~/.local/bin`（Windows 是 `%LOCALAPPDATA%\Programs\gsc-mcp`），并解除 macOS quarantine / Windows SmartScreen 拦截标记。后面三行请自己运行（会打开浏览器 / 写入 MCP 配置）。详见 [INSTALL.md](INSTALL.md) 与 [Releases](https://github.com/geniushub-seo/gsc-mcp/releases)。
+安装脚本会下载对应平台的二进制文件、**校验 SHA-256**、安装到 `~/.local/bin`（Windows 是 `%LOCALAPPDATA%\Programs\gsc-mcp`），并解除 macOS quarantine / Windows SmartScreen 拦截标记。若由 AI agent 协助，所有终端命令（包括启动 gcloud 登录）都由 agent 执行；用户只需在自动打开的 Google 页面选择账号并允许访问，不必打开终端或复制命令。详见 [INSTALL.md](INSTALL.md) 与 [Releases](https://github.com/geniushub-seo/gsc-mcp/releases)。
 
 `YOUR_PROJECT_ID` 换成你启用了 Search Console API 的 GCP 项目 ID。**这一行不能省**——ADC 是个人账号、不隶属任何项目，少了它所有查询都会返回 403 `requires a quota project`，看起来很像权限问题但并不是。
 
@@ -44,7 +44,7 @@ gsc-mcp setup
 
 用你自己的 Google 账号登录一次，MCP 配置里**不需要**任何凭据环境变量。
 
-最省事就是运行上面那三行。或者把仓库交给 AI agent，跟它说：按 [INSTALL.md](INSTALL.md) 帮我装好。
+手动安装可以运行上面的命令。若交给 AI agent，只需说“按 [INSTALL.md](INSTALL.md) 帮我装好”；agent 必须负责所有终端操作，用户只负责 Google 浏览器授权。
 
 ### 手动操作（二进制文件已安装之后）
 
@@ -86,7 +86,10 @@ gcloud auth application-default login \
 
 ### 写入（submit / delete sitemap）与 ADC
 
-**`GSC_ENABLE_WRITE=true` 对 ADC 无效。** ADC 令牌的 OAuth scope 在运行 `gcloud auth application-default login` 的那一刻就固定了，事后无法扩大。要写入就必须重新登录，并带上：
+写入有两道独立闸门，ADC 两道都要过：
+
+1. 设置 `GSC_ENABLE_WRITE=true`。这是 gsc-mcp 的**本地闸门**，对 ADC 与 service account 都生效。只重登 write scope 不够。
+2. ADC token 还必须在登录当下就带 `webmasters` scope（事后无法扩大）。重新登录并带上：
 
 ```bash
 gcloud auth application-default login \
@@ -102,8 +105,8 @@ gcloud auth application-default login \
 | `GOOGLE_APPLICATION_CREDENTIALS` | — | 官方 ADC 路径覆盖（优先级 2） |
 | `GOOGLE_SERVICE_ACCOUNT_FILE` | — | service account key 的路径（优先级 3） |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | — | 内联 JSON（优先级 4，适合 CI） |
-| `GSC_ENABLE_WRITE` | `false` | **仅 service account 有效**：把 scope 升级为 `webmasters` 并允许 `submit`。在 ADC 下只会告警，不起作用 |
-| `GSC_ALLOW_DESTRUCTIVE` | `false` | 允许 `delete`；同时还需要 `GSC_ENABLE_WRITE=true`（service account） |
+| `GSC_ENABLE_WRITE` | `false` | 本地写入闸门，允许 `submit`（所有凭证类型）。service account 同时把请求的 scope 升级为 `webmasters`。ADC 仍需登录时就带 `webmasters` token。 |
+| `GSC_ALLOW_DESTRUCTIVE` | `false` | 允许 `delete`；还需同时 `GSC_ENABLE_WRITE=true`（所有凭证类型） |
 | `GSC_REQUEST_TIMEOUT` | `30s` | 单次 API 调用的超时时间 |
 | `GSC_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 
@@ -148,7 +151,7 @@ chmod 600 ~/.config/gsc-mcp/service-account.json
 | Claude Code | `.mcp.json`、`.claude-plugin/`、`.agents/skills/` | 打开 repo 或安装 plugin。 |
 | Codex | `AGENTS.md`、`.agents/skills/` | 从 repo 根目录启动 Codex。 |
 | Cursor | `.cursor/mcp.json`、`.cursor/rules/gsc-mcp.mdc` | 将 repo 当作项目打开。 |
-| Hermes | 没有 repo-local 自动读取 | 把 [INSTALL.md](INSTALL.md) 的 `mcp_servers.gsc` 片段合并到 `~/.hermes/config.yaml`。 |
+| Hermes | [`.hermes/`](.hermes/) 上手工具 | 让 Hermes 按 `.hermes/ONESHOT.md` 安装；所有终端操作由 Hermes 执行，成功后开启新的 session。 |
 
 所有 client 的共同验收：先运行 `gsc-mcp doctor`，再让 agent 调用 `list_sites`。不要把 OAuth token 或 service-account key 放进这些文件。
 

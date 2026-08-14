@@ -33,20 +33,76 @@ Gives clicks, impressions, CTR and position for both periods plus deltas. Note t
 
 ## Step 3 — Brand vs non-brand split
 
-Run `compare_periods` twice more with `dimensions: ["query"]`, once with `excludingRegex` and once with `includingRegex` on the brand pattern. Ask the user for the brand terms if this is the first report of the conversation.
+KPI totals (clicks, share, change) come from **aggregate** calls: **omit dimensions**. Do not sum a `dimensions: ["query"]` top-N for these numbers — `row_limit` would silently drop traffic and `truncated` cannot recover the missing total.
 
-This split is what separates a real report from a vanity one. Branded traffic tracks brand awareness; non-brand tracks search performance.
+Ask the user for the brand terms if this is the first report of the conversation.
+
+**Non-brand totals:**
+
+```
+compare_periods
+  ...same dates...
+  dimensions: []
+  dimension_filter_groups: [{
+    "groupType": "and",
+    "filters": [{"dimension":"query","operator":"excludingRegex","expression":"<brand pattern>"}]
+  }]
+```
+
+**Branded totals:**
+
+```
+compare_periods
+  ...same dates...
+  dimensions: []
+  dimension_filter_groups: [{
+    "groupType": "and",
+    "filters": [{"dimension":"query","operator":"includingRegex","expression":"<brand pattern>"}]
+  }]
+```
+
+This split is what separates a real report from a vanity one. Branded traffic tracks brand awareness; non-brand tracks search performance. Query-level detail stays in Step 4.
 
 ## Step 4 — Winners and losers
 
-From the `["query"]` comparison, take:
+Do **not** take winners and losers from one `clicks_delta desc` call. That ranking only returns the biggest gains; the biggest drops sit at the other end of the list and are cut by `row_limit`.
 
-- Top 5 by positive `clicks_delta`
-- Top 5 by negative `clicks_delta`
-- Queries with `only_in: "b"` — newly appearing
-- Queries with `only_in: "a"` — disappeared
+Call `compare_periods` twice per dimension:
 
-Repeat with `dimensions: ["page"]` to get the same view by URL. Pages that lost clicks are usually more actionable than queries, because a page is something you can go and fix.
+**Winners (query):**
+
+```
+compare_periods
+  ...same dates...
+  dimensions: ["query"]
+  sort_by: clicks_delta
+  sort_order: desc
+  row_limit: 5
+```
+
+**Losers (query):**
+
+```
+compare_periods
+  ...same dates...
+  dimensions: ["query"]
+  sort_by: clicks_delta
+  sort_order: asc
+  row_limit: 5
+```
+
+Repeat both calls with `dimensions: ["page"]`. Pages that lost clicks are usually more actionable than queries, because a page is something you can go and fix.
+
+After every call, read `truncated`, `scan_capped`, and `ordering`:
+
+- `truncated=true` means more rows exist beyond `row_limit`.
+- `scan_capped=true` means even the 25,000-row scan was incomplete, so the top-N may be missing candidates.
+- Confirm `ordering` matches what you asked for before writing the table.
+
+Also collect:
+
+- Queries/pages with `only_in: "b"` — newly appearing
+- Queries/pages with `only_in: "a"` — disappeared
 
 ## Step 5 — Write the report
 
@@ -81,5 +137,7 @@ Three at most, ordered by expected impact. Each names a specific page or query.
 - Give exact date ranges. "Last month" is ambiguous and clients will compare against their own dashboard.
 - Round rates sensibly: CTR to one decimal as a percentage, position to one decimal.
 - Do not attribute causes the data cannot support. A ranking drop is visible; *why* it dropped is not in Search Console.
+- Always read `truncated`, `scan_capped`, and `ordering` on every `compare_periods` / `query_search_analytics` response. Do not treat a top-N as complete when either flag is true.
+- Never derive brand/non-brand **share or change** from a capped grouped query list. Use the aggregate (no-dimension) calls from Step 3. Anonymized `(other)` queries can still make the two halves miss the site total — say so.
 - API rows are top rows only, so category totals will not sum to the site total. Say so if you show both.
 - Impressions moving without clicks moving usually means a position or SERP-feature change, not a content problem — check position before recommending a rewrite.

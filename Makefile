@@ -1,17 +1,28 @@
 .PHONY: check vet test lint build-release
 
+# Recipes must run from the module root. `make -f ../Makefile lint` from
+# dist/ or .github/ would otherwise pass ./... to a directory with no Go
+# files, and golangci-lint 2.12.2 reports that as "no go files to analyze"
+# — a loader/cwd error, not a clean lint result.
+MODULE_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
 check: vet test lint
 
 vet:
-	go vet ./...
+	cd "$(MODULE_ROOT)" && go vet ./...
 
 test:
-	go test ./...
+	cd "$(MODULE_ROOT)" && go test ./...
 
 GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null || echo "$(shell go env GOPATH)/bin/golangci-lint")
 
 lint:
-	$(GOLANGCI_LINT) run ./...
+	@if [ ! -x "$(GOLANGCI_LINT)" ]; then \
+		echo "golangci-lint not found at $(GOLANGCI_LINT)"; \
+		echo "install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2"; \
+		exit 1; \
+	fi
+	cd "$(MODULE_ROOT)" && $(GOLANGCI_LINT) run ./...
 
 # Local multi-arch build (mirrors release.yml). VERSION defaults to git describe.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)

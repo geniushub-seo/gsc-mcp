@@ -32,7 +32,10 @@ $env:DRY_RUN = '1'; irm https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/
 
 The installer detects the platform, downloads the release, verifies SHA-256, installs to `~/.local/bin` (`%LOCALAPPDATA%\Programs\gsc-mcp` on Windows), removes the quarantine / SmartScreen block, and reports PATH instructions. It does **not** run `gcloud login`, change MCP configuration, or edit a shell rc file.
 
-Print the following commands for the user to run themselves; do not run their browser-based login for them:
+When an agent is performing the installation, the **agent executes all of the
+following commands** through its terminal tool. The user must not be sent to
+Terminal. For the login command, tell the user that Google will open in their
+browser; the user only chooses an account and approves access.
 
 ```bash
 gcloud auth application-default login \
@@ -43,14 +46,14 @@ gsc-mcp setup
 
 The second command is required; see step 1c. After installation, or whenever setup fails, run `gsc-mcp doctor` (a complete, non-writing check plus a real `list_sites` call).
 
-## What you may and may not do
+## Responsibility boundary
 
-| You may do yourself | The user must do personally |
+| The agent must do | The user must do personally |
 |---|---|
-| Run `install.sh` / `gsc-mcp setup` | Complete browser-based `gcloud auth application-default login` |
-| Merge MCP configuration after backing it up | Enable the Search Console API in Cloud Console, if needed |
-| Verify `list_sites` | Restart GUI clients such as Claude Desktop |
-| Detect whether gcloud / ADC exists | — |
+| Execute every shell / PowerShell command, including starting `gcloud auth application-default login` | Choose the Google account and approve access in the browser page opened by gcloud |
+| Install dependencies, set the quota project, merge MCP configuration, and verify `list_sites` | Select or create a GCP project in browser UI when no safe automated choice exists |
+| Keep the OAuth process running and resume automatically when it exits | Approve administrator or OS security prompts when required |
+| Diagnose failures without displaying credential contents | Restart a GUI client when the agent cannot do it |
 
 **ADC with the user's Google account is the preferred path.** It does not require a service account or adding an email address to every property.
 
@@ -58,7 +61,8 @@ The second command is required; see step 1c. After installation, or whenever set
 
 1. Which AI client will they use? Claude Desktop, Claude Code, Codex, Cursor, Hermes, or VS Code?
 2. Is gcloud installed? Check with `which gcloud`.
-3. Have they already run `gcloud auth application-default login`?
+3. Does ADC already exist? Check without reading its contents. If it does not,
+   the agent starts `gcloud auth application-default login` itself.
 
 For an explicit CI or headless requirement, use **Advanced: service account** at the end of this document.
 
@@ -78,20 +82,28 @@ For an explicit CI or headless requirement, use **Advanced: service account** at
 
 **Warning:** do not only unpack the tarball. Without its `install.sh`, bundled Python is not installed and the launcher falls back to system `python3` (macOS ships 3.9; gcloud requires 3.10–3.14). The resulting error looks like a `gsc-mcp` problem. The ~713 MB download is the Google Cloud SDK, not this project.
 
-Never automatically run a command that opens a browser; print it for the user.
+The agent is responsible for starting commands that open a browser. Tell the
+user what browser interaction is about to occur, then execute the command and
+keep it running while they approve access.
 
-### 1b. Ask the user to log in to ADC
+### 1b. Agent starts ADC login; user only approves in the browser
 
-Send this verbatim:
+Tell the user:
 
-> Run this in a terminal. It opens a browser so you can sign in to your Google account:
->
-> ```bash
-> gcloud auth application-default login \
->   --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
-> ```
->
-> Tell me when it finishes. If the Search Console API is not enabled, open https://console.cloud.google.com/apis/library/searchconsole.googleapis.com and select **Enable**.
+> I will open Google's sign-in page. Choose the Google account that has Search
+> Console access and approve the requested read-only access. You do not need to
+> open Terminal or copy any command.
+
+Then the agent runs this through its terminal tool and waits for it to finish:
+
+```bash
+gcloud auth application-default login \
+  --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+```
+
+If the normal launch does not open a browser, first try the platform's browser
+or OS-open capability. Do not fall back to repeatedly asking the user to paste
+the shell command.
 
 Confirm only that the credential file exists:
 
@@ -105,7 +117,9 @@ On Windows the path is `%APPDATA%\gcloud\application_default_credentials.json`. 
 
 ADC belongs to a personal account, not a GCP project. Google therefore needs an explicit project to charge this request's quota to. A service-account key embeds project information; ADC does not.
 
-Ask the user to run this, replacing `YOUR_PROJECT_ID` with the lowercase project ID where they enabled the Search Console API (not its display name):
+The agent runs this itself, replacing `YOUR_PROJECT_ID` with the verified
+lowercase project ID where the Search Console API is enabled (not its display
+name). Never send the placeholder to the user as a command:
 
 ```bash
 gcloud auth application-default set-quota-project YOUR_PROJECT_ID
@@ -123,7 +137,7 @@ Use this table as an agent. Start with the symptom and issue the listed fix; mis
 |---|---|---|---|
 | 403 `permission_denied` containing `requires a quota project` | ADC has no quota project | Ask the user to add a GSC user | Return to 1c and run `set-quota-project` |
 | Sudden `auth_failed` containing `cannot fetch token` or `invalid_grant` | Refresh token expired after a password change, inactivity, or org policy | Reinstall the binary or rerun `install.sh` | Rerun 1b's `application-default login` |
-| Sitemap `submit` / `delete` is rejected or returns 403 | ADC scopes are fixed at login | Set `GSC_ENABLE_WRITE=true`; it has no effect for ADC | Log in again with `webmasters`, below |
+| Sitemap `submit` / `delete` is rejected or returns 403 | Local write gate closed, or ADC token is still readonly | Skip `GSC_ENABLE_WRITE=true` after re-login, or skip re-login | Set `GSC_ENABLE_WRITE=true` **and**, for ADC, log in again with `webmasters` below |
 | `gcloud projects list` says credentials expired after successful ADC login | A separate token is used | Rerun `application-default login` | Run `gcloud auth login` |
 | Windows reports `gcloud` is not recognized although it is installed | gcloud is absent from PATH | Rerun `winget install` | Use `%LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd` |
 
@@ -138,9 +152,9 @@ After ADC login, `gcloud projects list` can still fail because it uses the first
 
 ### ADC writes require re-login with write scope
 
-`GSC_ENABLE_WRITE=true` cannot modify scopes on an already issued ADC OAuth token. It is effective only for service accounts. If gsc-mcp detects ADC with that flag, it writes a warning to stderr; follow it instead of investigating further.
+`GSC_ENABLE_WRITE=true` is the local write gate and applies to ADC as well as service accounts. Re-logging with write scope is not enough: without the flag, `submit` / `delete` still return `write_disabled`. The flag also cannot add scopes to an already issued ADC token.
 
-The only way to enable ADC writes is to log in again with the write scope:
+ADC writes therefore need both the flag **and** a token issued with the write scope:
 
 ```bash
 gcloud auth application-default login \
@@ -243,7 +257,21 @@ When this repository is opened, Codex reads root `AGENTS.md` and `.agents/skills
 
 ### Hermes
 
-Hermes has no repo-local MCP discovery. **Merge**, do not replace, this entry under `mcp_servers` in `~/.hermes/config.yaml`:
+Hermes keeps MCP configuration in the active profile returned by
+`hermes config path`; it does not auto-load a repository `.hermes/` config.
+This repository provides an onboarding bundle that uses the Hermes CLI to
+preserve existing settings, add `gsc`, and test all six tools:
+
+```bash
+bash .hermes/setup.sh
+```
+
+Then start a new Hermes session and call `list_sites`. See
+[.hermes/README.md](.hermes/README.md) for the completion evidence and recovery
+steps.
+
+For a manual merge, **merge**, do not replace, this entry under `mcp_servers`
+in the file printed by `hermes config path`:
 
 ```yaml
 mcp_servers:
@@ -256,23 +284,21 @@ ADC needs no `env` block. Restart Hermes, then first ask it to call `list_sites`
 
 ### VS Code and Copilot
 
-Their configuration path varies. Do not guess it; print the JSON snippet for the user to paste into the location their client documents.
+Their configuration path varies. Do not guess it. Consult that client's local
+or official configuration instructions and perform the merge through the
+agent's tools. Do not send a novice user to Terminal to edit or paste JSON.
 
 ## Step 4: verify
 
-### Terminal verification (ADC, no environment variables)
+### Terminal verification
+
+Do not hand-write JSON-RPC against stdio. Use:
 
 ```bash
-{ printf '%s\n' \
-  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' \
-  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
-  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'; sleep 2; } \
-  | ~/.local/bin/gsc-mcp 2>/tmp/gsc-mcp-err.log
+gsc-mcp doctor
 ```
 
-`sleep 2` is required: otherwise stdin can reach EOF too early and create a false zero-output failure.
-
-Expected result: stdout contains JSON-RPC, `tools/list` contains six tools, and stderr does not contain `no credentials`.
+It checks gcloud / ADC / MCP config and makes one real `list_sites` call without writing files. A non-zero exit means the environment is not ready.
 
 Then test from the agent:
 
@@ -287,7 +313,7 @@ An empty list means the account has no GSC properties, the API is disabled, or t
 | `no credentials found; checked: ...` | ADC is not logged in; run `application-default login`. |
 | `list_sites` returns 403 / auth error | Scope is insufficient or API is disabled; rerun login with `--scopes`. |
 | Empty property list | The Google account has no GSC property or is the wrong account. |
-| `GSC_ENABLE_WRITE` still cannot submit | It has no effect for ADC; log in again with the `webmasters` scope. |
+| `GSC_ENABLE_WRITE` still cannot submit | ADC also needs a `webmasters` token; re-login with that scope. The flag is still required as the local gate. |
 | GUI does not show the tool | Configuration was not merged or the app was not fully restarted. |
 | Refresh suddenly fails | Token expired; rerun login. |
 
@@ -295,7 +321,9 @@ An empty list means the account has no GSC properties, the API is disabled, or t
 
 - Never print ADC or service-account JSON contents.
 - Never overwrite an entire MCP config file; always merge and back up.
-- Never automatically run `gcloud auth login` or `application-default login`.
+- The agent starts `gcloud auth login` and `application-default login`; the
+  human performs only the Google browser consent. Never automate the consent
+  click or display the resulting credentials.
 - Keep the server read-only by default; do not proactively enable write flags.
 
 ## Advanced: service account (headless / CI)
@@ -338,7 +366,7 @@ For service accounts, `GSC_ENABLE_WRITE=true` upgrades the scope to `webmasters`
 | `GOOGLE_SERVICE_ACCOUNT_FILE` | Service-account key file. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Inline JSON for CI. |
 | `GSC_LOG_LEVEL` | `warn` is a useful default. |
-| `GSC_ENABLE_WRITE` | Upgrades scope only for service accounts. |
+| `GSC_ENABLE_WRITE` | Local write gate for every credential type. Also upgrades the requested scope for service accounts. ADC still needs a `webmasters` token. |
 | `GSC_ALLOW_DESTRUCTIVE` | Permits delete. |
 
 See [README.md](README.md) and [SPEC.md](SPEC.md) section 4 for full details.

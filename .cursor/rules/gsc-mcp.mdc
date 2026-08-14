@@ -10,5 +10,5 @@ Use this rule whenever the user asks to install gsc-mcp, diagnose it, or analyse
 - Never print, read, or add OAuth tokens, ADC files, or service-account key contents to configuration or chat.
 - Before a first data query, call `list_sites` when the property is not unambiguous.
 - Treat dates as Pacific Time and avoid the newest 2–4 days unless the user explicitly accepts incomplete data.
-- Read `truncated` and `scan_capped` before drawing a conclusion from a top-N response.
+- Read `truncated`, `scan_capped`, and `ordering` before drawing a conclusion from a top-N response.
 - Sitemap `submit` and `delete` are real writes. Do not use them as a test.

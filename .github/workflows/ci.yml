@@ -33,7 +33,10 @@ jobs:
 
       # .golangci.yml uses version: "2". The linter binary must be built with a
       # Go toolchain >= go.mod (1.26.x); older v2.1.x binaries fail to load config.
+      # "no go files to analyze" is a package-loader / cwd error (./... from a
+      # directory with no Go files), not a reason to skip this step.
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.12.2
           args: ./...
+          working-directory: .

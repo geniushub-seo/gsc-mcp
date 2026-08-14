@@ -7,7 +7,7 @@
 #   DRY_RUN=1 ./install.sh
 #
 # Does NOT: run gcloud login, merge MCP config, or edit shell rc files.
-# After install, run the two printed follow-up commands yourself.
+# After install, an assisting agent must run the printed follow-up commands.
 
 set -euo pipefail
 
@@ -92,7 +92,13 @@ else
     # checksums.txt lines: "<sha256>  <filename>"
     expected="$(grep -E "[[:space:]]${asset}\$" checksums.txt | awk '{print $1}')"
     [ -n "$expected" ] || die "no checksum entry for ${asset}"
-    actual="$(shasum -a 256 "${asset}" | awk '{print $1}')"
+    if command -v shasum >/dev/null 2>&1; then
+      actual="$(shasum -a 256 "${asset}" | awk '{print $1}')"
+    elif command -v sha256sum >/dev/null 2>&1; then
+      actual="$(sha256sum "${asset}" | awk '{print $1}')"
+    else
+      die "need shasum or sha256sum to verify ${asset}"
+    fi
     if [ "$expected" != "$actual" ]; then
       rm -f "${asset}"
       die "checksum mismatch for ${asset} (expected ${expected}, got ${actual})"
@@ -115,7 +121,8 @@ else
   if command -v "$dest" >/dev/null 2>&1 || echo ":$PATH:" | grep -q ":${INSTALL_DIR}:"; then
     log "PATH: ${INSTALL_DIR} is available"
   else
-    log "PATH: ${INSTALL_DIR} is not on your PATH. Add it with:"
+    log "PATH: ${INSTALL_DIR} is not on your PATH. An assisting agent should use the absolute binary path immediately."
+    log "Manual installers can add it with:"
     log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc   # or ~/.bashrc"
     log "  then open a new terminal"
   fi
@@ -123,7 +130,13 @@ fi
 
 cat <<EOF >&2
 
-Next steps (run these yourself — this script will not):
+Next steps (this installer does not run them):
+
+  With an AI agent, the agent executes every command below. The user only
+  chooses an account and approves access in the Google browser page opened by
+  gcloud; do not send the user to Terminal.
+
+  Manual installers may run:
 
   1) Sign in with Application Default Credentials (browser):
      gcloud auth application-default login \\

@@ -8,6 +8,46 @@
           "description": "Optional data freshness: all (default), final, or hourly_all.",
           "type": "string"
         },
+        "dimension_filter_groups": {
+          "description": "Optional dimension filters applied to both periods. Each group contains groupType='and' and an array of filters with dimension, operator, and expression. Use excludingRegex to exclude branded terms.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "filters": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "dimension": {
+                      "description": "Dimension to filter on: query, page, country, device, or searchAppearance.",
+                      "type": "string"
+                    },
+                    "expression": {
+                      "description": "The value or regex to filter by.",
+                      "type": "string"
+                    },
+                    "operator": {
+                      "description": "Filter operator: equals, notEquals, contains, notContains, includingRegex, excludingRegex.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "dimension",
+                    "operator",
+                    "expression"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "groupType": {
+                "description": "Filter logic within the group. Only 'and' is supported by the GSC API.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
         "dimensions": {
           "description": "Optional dimensions to group by: query, page, country, device, date, hour, or searchAppearance.",
           "items": {

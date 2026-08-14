@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/api/searchconsole/v1"
 )
 
@@ -17,31 +17,32 @@ import (
 // Period A is the baseline (earlier); period B is the current (later).
 // All deltas and *_change_pct are B minus A.
 type comparePeriodsInput struct {
-	SiteURL      string   `json:"site_url" jsonschema:"The GSC property to query."`
-	PeriodAStart string   `json:"period_a_start" jsonschema:"Start date of period A — baseline/earlier period (YYYY-MM-DD, PT)."`
-	PeriodAEnd   string   `json:"period_a_end" jsonschema:"End date of period A — baseline/earlier period (YYYY-MM-DD, PT)."`
-	PeriodBStart string   `json:"period_b_start" jsonschema:"Start date of period B — current/later period (YYYY-MM-DD, PT)."`
-	PeriodBEnd   string   `json:"period_b_end" jsonschema:"End date of period B — current/later period (YYYY-MM-DD, PT)."`
-	Dimensions   []string `json:"dimensions,omitempty" jsonschema:"Optional dimensions to group by: query, page, country, device, date, hour, or searchAppearance."`
-	SearchType   string   `json:"search_type,omitempty" jsonschema:"Optional search type: web, image, video, news, discover, or googleNews. Omit to let Google default to web."`
-	RowLimit     int      `json:"row_limit,omitempty" jsonschema:"Optional max rows in the response. Default 100, maximum 25000. This caps the joined output, not just each period."`
-	DataState    string   `json:"data_state,omitempty" jsonschema:"Optional data freshness: all (default), final, or hourly_all."`
-	SortBy       string   `json:"sort_by,omitempty" jsonschema:"Optional sort key: clicks_delta (default), impressions_delta, ctr_delta_pp, or position_change. Every delta ordering requires scanning up to 25,000 rows per period because the GSC API can only order by clicks."`
-	SortOrder    string   `json:"sort_order,omitempty" jsonschema:"Optional sort direction: asc or desc. Defaults to desc for the delta keys (biggest gains first; use asc for biggest drops) and asc for position_change (biggest rank improvement first)."`
+	SiteURL               string                 `json:"site_url" jsonschema:"The GSC property to query."`
+	PeriodAStart          string                 `json:"period_a_start" jsonschema:"Start date of period A — baseline/earlier period (YYYY-MM-DD, PT)."`
+	PeriodAEnd            string                 `json:"period_a_end" jsonschema:"End date of period A — baseline/earlier period (YYYY-MM-DD, PT)."`
+	PeriodBStart          string                 `json:"period_b_start" jsonschema:"Start date of period B — current/later period (YYYY-MM-DD, PT)."`
+	PeriodBEnd            string                 `json:"period_b_end" jsonschema:"End date of period B — current/later period (YYYY-MM-DD, PT)."`
+	Dimensions            []string               `json:"dimensions,omitempty" jsonschema:"Optional dimensions to group by: query, page, country, device, date, hour, or searchAppearance."`
+	SearchType            string                 `json:"search_type,omitempty" jsonschema:"Optional search type: web, image, video, news, discover, or googleNews. Omit to let Google default to web."`
+	DimensionFilterGroups []DimensionFilterGroup `json:"dimension_filter_groups,omitempty" jsonschema:"Optional dimension filters applied to both periods. Each group contains groupType='and' and an array of filters with dimension, operator, and expression. Use excludingRegex to exclude branded terms."`
+	RowLimit              int                    `json:"row_limit,omitempty" jsonschema:"Optional max rows in the response. Default 100, maximum 25000. This caps the joined output, not just each period."`
+	DataState             string                 `json:"data_state,omitempty" jsonschema:"Optional data freshness: all (default), final, or hourly_all."`
+	SortBy                string                 `json:"sort_by,omitempty" jsonschema:"Optional sort key: clicks_delta (default), impressions_delta, ctr_delta_pp, or position_change. Every delta ordering requires scanning up to 25,000 rows per period because the GSC API can only order by clicks."`
+	SortOrder             string                 `json:"sort_order,omitempty" jsonschema:"Optional sort direction: asc or desc. Defaults to desc for the delta keys (biggest gains first; use asc for biggest drops) and asc for position_change (biggest rank improvement first)."`
 }
 
 type comparePeriodsOutput struct {
-	QueriedAt    string             `json:"queried_at"`
-	SiteURL      string             `json:"site_url"`
-	PeriodAStart string             `json:"period_a_start"`
-	PeriodAEnd   string             `json:"period_a_end"`
-	PeriodBStart string             `json:"period_b_start"`
-	PeriodBEnd   string             `json:"period_b_end"`
-	PeriodADays  int                `json:"period_a_days"`
-	PeriodBDays  int                `json:"period_b_days"`
-	Dimensions   []string           `json:"dimensions,omitempty"`
-	SearchType   string             `json:"search_type,omitempty"`
-	DataState    string             `json:"data_state,omitempty"`
+	QueriedAt    string   `json:"queried_at"`
+	SiteURL      string   `json:"site_url"`
+	PeriodAStart string   `json:"period_a_start"`
+	PeriodAEnd   string   `json:"period_a_end"`
+	PeriodBStart string   `json:"period_b_start"`
+	PeriodBEnd   string   `json:"period_b_end"`
+	PeriodADays  int      `json:"period_a_days"`
+	PeriodBDays  int      `json:"period_b_days"`
+	Dimensions   []string `json:"dimensions,omitempty"`
+	SearchType   string   `json:"search_type,omitempty"`
+	DataState    string   `json:"data_state,omitempty"`
 	// Note is a soft advisory (dropped path), not an error.
 	Note string `json:"note,omitempty"`
 	// Ordering names the key and direction the joined rows are sorted by.
@@ -119,6 +120,42 @@ var comparePeriodsInputSchema = json.RawMessage(`{
     "search_type": {
       "type": "string",
       "description": "Optional search type: web, image, video, news, discover, or googleNews. Omit to let Google default to web."
+    },
+    "dimension_filter_groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "groupType": {
+            "type": "string",
+            "description": "Filter logic within the group. Only 'and' is supported by the GSC API."
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "dimension": {
+                  "type": "string",
+                  "description": "Dimension to filter on: query, page, country, device, or searchAppearance."
+                },
+                "operator": {
+                  "type": "string",
+                  "description": "Filter operator: equals, notEquals, contains, notContains, includingRegex, excludingRegex."
+                },
+                "expression": {
+                  "type": "string",
+                  "description": "The value or regex to filter by."
+                }
+              },
+              "required": ["dimension", "operator", "expression"]
+            }
+          }
+        }
+      },
+      "description": "Optional dimension filters applied to both periods. Each group contains groupType='and' and an array of filters with dimension, operator, and expression. Use excludingRegex to exclude branded terms."
     },
     "row_limit": {
       "type": "integer",
@@ -246,6 +283,16 @@ func validateComparePeriods(input comparePeriodsInput) (comparePeriodsInput, gsc
 	}
 	out.Dimensions = dims
 
+	groups, err := normalizeFilterGroups(input.DimensionFilterGroups)
+	if err.Code != "" {
+		return out, err
+	}
+	out.DimensionFilterGroups = groups
+
+	if err := validateFilterDimensions(out.DimensionFilterGroups); err.Code != "" {
+		return out, err
+	}
+
 	if out.RowLimit == 0 {
 		out.RowLimit = 100
 	} else if out.RowLimit < 1 || out.RowLimit > 25000 {
@@ -319,12 +366,13 @@ func inclusiveDays(start, end string) (int, error) {
 
 func buildCompareQueryRequest(input comparePeriodsInput, start, end string) *searchconsole.SearchAnalyticsQueryRequest {
 	return &searchconsole.SearchAnalyticsQueryRequest{
-		StartDate:  start,
-		EndDate:    end,
-		Dimensions: input.Dimensions,
-		Type:       input.SearchType,
-		RowLimit:   sortScanRowLimit,
-		DataState:  input.DataState,
+		StartDate:             start,
+		EndDate:               end,
+		Dimensions:            input.Dimensions,
+		Type:                  input.SearchType,
+		RowLimit:              sortScanRowLimit,
+		DataState:             input.DataState,
+		DimensionFilterGroups: toAPIFilterGroups(input.DimensionFilterGroups),
 	}
 }
 

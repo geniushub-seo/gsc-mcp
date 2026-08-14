@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/api/searchconsole/v1"
 )
 
@@ -30,28 +30,29 @@ type querySearchAnalyticsInput struct {
 // querySearchAnalyticsOutput is the successful response shape for
 // query_search_analytics.
 type querySearchAnalyticsOutput struct {
-	QueriedAt       string                    `json:"queried_at"`
-	SiteURL         string                    `json:"site_url"`
-	StartDate       string                    `json:"start_date"`
-	EndDate         string                    `json:"end_date"`
-	Dimensions      []string                  `json:"dimensions,omitempty"`
-	SearchType      string                    `json:"search_type,omitempty"`
-	DataState       string                    `json:"data_state,omitempty"`
-	AggregationType string                    `json:"aggregation_type,omitempty"`
+	QueriedAt       string   `json:"queried_at"`
+	SiteURL         string   `json:"site_url"`
+	StartDate       string   `json:"start_date"`
+	EndDate         string   `json:"end_date"`
+	Dimensions      []string `json:"dimensions,omitempty"`
+	SearchType      string   `json:"search_type,omitempty"`
+	DataState       string   `json:"data_state,omitempty"`
+	AggregationType string   `json:"aggregation_type,omitempty"`
 	// Note is a soft advisory (future dates, possible retention, dropped path),
 	// not an error.
 	Note string `json:"note,omitempty"`
 	// Ordering names the key and direction the rows are actually sorted by, so a
 	// caller can never mistake GSC's native clicks-desc order for what it asked.
 	Ordering string `json:"ordering"`
-	// RowsExamined is how many rows were considered before truncation to
-	// row_limit. Equal to row_count when nothing was dropped.
+	// RowsExamined is how many rows were considered before start_row (non-native
+	// local sort) and before truncation to row_limit. On the native path it is
+	// the fetched count, including the extra peek row used to set truncated.
 	RowsExamined int `json:"rows_examined"`
-	// Truncated is true when rows_examined exceeded row_limit, i.e. the returned
-	// rows are the top row_limit of a larger set under the stated ordering.
+	// Truncated is true when the post-offset candidate set exceeded row_limit,
+	// i.e. the returned rows are the top row_limit of a larger page.
 	Truncated bool `json:"truncated"`
 	// ScanCapped is true when the scan itself hit the API's 25,000-row ceiling,
-	// so rows_examined is incomplete and the top-N may be missing entries.
+	// so the candidate set is incomplete and the top-N may be missing entries.
 	ScanCapped bool                      `json:"scan_capped,omitempty"`
 	RowCount   int                       `json:"row_count"`
 	Rows       []querySearchAnalyticsRow `json:"rows"`
@@ -179,12 +180,12 @@ func querySearchAnalytics(ctx context.Context, client *gscclient.Client, input q
 
 	// GSC always returns rows ordered by clicks descending. Any other ordering
 	// has to be produced here, which means fetching more rows than we return.
-	nativeOrder := normalized.SortBy == sortClicks && normalized.SortOrder == sortDesc
-	fetchLimit := normalized.RowLimit
-	if !nativeOrder {
-		fetchLimit = sortScanRowLimit
-	}
-	req := buildSearchAnalyticsRequest(normalized, fetchLimit)
+	// Native clicks-desc still peeks one extra row so truncated is honest.
+	// Non-native order must scan from the start; applying start_row at Google
+	// would sort a leftover window, not the full set.
+	nativeOrder := isNativeAnalyticsOrder(normalized)
+	fetchLimit, startRow := analyticsFetchPlan(normalized, nativeOrder)
+	req := buildSearchAnalyticsRequest(normalized, fetchLimit, startRow)
 
 	var resolvedSiteURL string
 	resp, err := gscclient.WithResolvedSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (*searchconsole.SearchAnalyticsQueryResponse, error) {
@@ -195,16 +196,7 @@ func querySearchAnalytics(ctx context.Context, client *gscclient.Client, input q
 		return toolError(gscclient.MapGoogleAPIError(err)), nil, nil
 	}
 
-	rows := toAnalyticsRows(resp.Rows)
-	scanCapped := !nativeOrder && len(rows) >= sortScanRowLimit
-	if !nativeOrder {
-		sortAnalyticsRows(rows, normalized.SortBy, normalized.SortOrder)
-	}
-	examined := len(rows)
-	truncated := examined > normalized.RowLimit
-	if truncated {
-		rows = rows[:normalized.RowLimit]
-	}
+	rows, examined, truncated, scanCapped := applyAnalyticsWindow(toAnalyticsRows(resp.Rows), normalized, nativeOrder)
 
 	out := querySearchAnalyticsOutput{
 		QueriedAt:       nowRFC3339(),
@@ -229,39 +221,89 @@ func querySearchAnalytics(ctx context.Context, client *gscclient.Client, input q
 	return toolResult(out), nil, nil
 }
 
-func buildSearchAnalyticsRequest(input querySearchAnalyticsInput, fetchLimit int) *searchconsole.SearchAnalyticsQueryRequest {
+func isNativeAnalyticsOrder(input querySearchAnalyticsInput) bool {
+	return input.SortBy == sortClicks && input.SortOrder == sortDesc
+}
+
+// analyticsFetchPlan decides how many rows to ask Google for and which
+// start_row to send. Native clicks-desc can paginate at Google; any other
+// ordering must scan from row 0 and apply start_row after a local sort.
+func analyticsFetchPlan(input querySearchAnalyticsInput, nativeOrder bool) (fetchLimit, startRow int) {
+	if nativeOrder {
+		fetchLimit = input.RowLimit
+		if fetchLimit < sortScanRowLimit {
+			fetchLimit++
+		}
+		return fetchLimit, input.StartRow
+	}
+	return sortScanRowLimit, 0
+}
+
+// applyAnalyticsWindow sorts (when needed), applies start_row, then caps to
+// row_limit. Native clicks-desc already arrives in order; the extra peeked
+// row is only used to set truncated. Hitting the 25,000 API ceiling is
+// reported as scan_capped because the scan itself is incomplete.
+func applyAnalyticsWindow(rows []querySearchAnalyticsRow, input querySearchAnalyticsInput, nativeOrder bool) (out []querySearchAnalyticsRow, examined int, truncated, scanCapped bool) {
+	if !nativeOrder {
+		scanCapped = len(rows) >= sortScanRowLimit
+		sortAnalyticsRows(rows, input.SortBy, input.SortOrder)
+		examined = len(rows)
+		if input.StartRow > 0 {
+			if input.StartRow >= len(rows) {
+				rows = rows[:0]
+			} else {
+				rows = rows[input.StartRow:]
+			}
+		}
+	} else {
+		if input.RowLimit >= sortScanRowLimit {
+			scanCapped = len(rows) >= sortScanRowLimit
+		}
+		examined = len(rows)
+	}
+
+	truncated = len(rows) > input.RowLimit
+	if truncated {
+		rows = rows[:input.RowLimit]
+	}
+	return rows, examined, truncated, scanCapped
+}
+
+func buildSearchAnalyticsRequest(input querySearchAnalyticsInput, fetchLimit, startRow int) *searchconsole.SearchAnalyticsQueryRequest {
 	// Use Type (json:"type"), not SearchType (json:"searchType"). Official REST
 	// docs and SPEC.md §3.1 name the field "type"; the generated client exposes
 	// both and picking the wrong one silently fails to filter.
-	req := &searchconsole.SearchAnalyticsQueryRequest{
-		StartDate:       input.StartDate,
-		EndDate:         input.EndDate,
-		Dimensions:      input.Dimensions,
-		Type:            input.SearchType,
-		AggregationType: input.AggregationType,
-		RowLimit:        int64(fetchLimit),
-		StartRow:        int64(input.StartRow),
-		DataState:       input.DataState,
+	return &searchconsole.SearchAnalyticsQueryRequest{
+		StartDate:             input.StartDate,
+		EndDate:               input.EndDate,
+		Dimensions:            input.Dimensions,
+		Type:                  input.SearchType,
+		AggregationType:       input.AggregationType,
+		RowLimit:              int64(fetchLimit),
+		StartRow:              int64(startRow),
+		DataState:             input.DataState,
+		DimensionFilterGroups: toAPIFilterGroups(input.DimensionFilterGroups),
 	}
+}
 
-	if len(input.DimensionFilterGroups) > 0 {
-		groups := make([]*searchconsole.ApiDimensionFilterGroup, len(input.DimensionFilterGroups))
-		for i, g := range input.DimensionFilterGroups {
-			filters := make([]*searchconsole.ApiDimensionFilter, len(g.Filters))
-			for j, f := range g.Filters {
-				filters[j] = &searchconsole.ApiDimensionFilter{
-					Dimension:  f.Dimension,
-					Operator:   f.Operator,
-					Expression: f.Expression,
-				}
-			}
-			groups[i] = &searchconsole.ApiDimensionFilterGroup{
-				GroupType: g.GroupType,
-				Filters:   filters,
+func toAPIFilterGroups(groups []DimensionFilterGroup) []*searchconsole.ApiDimensionFilterGroup {
+	if len(groups) == 0 {
+		return nil
+	}
+	out := make([]*searchconsole.ApiDimensionFilterGroup, len(groups))
+	for i, g := range groups {
+		filters := make([]*searchconsole.ApiDimensionFilter, len(g.Filters))
+		for j, f := range g.Filters {
+			filters[j] = &searchconsole.ApiDimensionFilter{
+				Dimension:  f.Dimension,
+				Operator:   f.Operator,
+				Expression: f.Expression,
 			}
 		}
-		req.DimensionFilterGroups = groups
+		out[i] = &searchconsole.ApiDimensionFilterGroup{
+			GroupType: g.GroupType,
+			Filters:   filters,
+		}
 	}
-
-	return req
+	return out
 }

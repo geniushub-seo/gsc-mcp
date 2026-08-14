@@ -17,11 +17,11 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/geniushub-seo/gsc-mcp/internal/config"
 	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
 	"github.com/geniushub-seo/gsc-mcp/internal/setup"
 	"github.com/geniushub-seo/gsc-mcp/internal/tools"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // version is set by -ldflags at release time. The default "dev" value makes
@@ -135,7 +135,7 @@ func warnSilentlyIgnoredFlags(cfg config.Config) {
 		slog.Warn("GSC_ALLOW_DESTRUCTIVE is ignored because GSC_ENABLE_WRITE is not set; set both env vars to enable destructive actions")
 	}
 	if cfg.IsADC() && cfg.EnableWrite {
-		slog.Warn("GSC_ENABLE_WRITE has no effect with ADC (authorized_user) credentials: OAuth scopes are fixed at gcloud login time and cannot be expanded later. To enable write access, re-run: gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters,https://www.googleapis.com/auth/cloud-platform")
+		slog.Warn("GSC_ENABLE_WRITE=true opens the local write gate, but ADC tokens cannot gain write scopes after login. Writes also require a token issued with https://www.googleapis.com/auth/webmasters. Re-run: gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters,https://www.googleapis.com/auth/cloud-platform")
 	}
 }
 

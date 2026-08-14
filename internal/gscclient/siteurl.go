@@ -140,7 +140,7 @@ func ResolveSiteURL(ctx context.Context, lister SiteLister, input, exclude strin
 	return "", NewError(
 		ErrPermissionDenied,
 		fmt.Sprintf("no matching GSC property found for %q; accessible properties: %v", input, accessible),
-		"use list_sites to see accessible properties or ask the property owner to add the service account email",
+		"use list_sites to see accessible properties or ask the property owner to grant this credential access",
 	)
 }
 
@@ -202,5 +202,6 @@ func extractApexDomain(host string) string {
 	if idx := strings.LastIndex(host, ":"); idx != -1 {
 		host = host[:idx]
 	}
-	return strings.ToLower(strings.TrimPrefix(host, "www."))
+	host = strings.ToLower(host)
+	return strings.TrimPrefix(host, "www.")
 }

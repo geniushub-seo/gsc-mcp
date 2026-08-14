@@ -103,7 +103,7 @@ func MapGoogleAPIError(err error) Error {
 		if matchesAny(msg, quotaProjectMarker) {
 			return Error{Code: ErrPermissionDenied, Message: msg, Suggestion: quotaProjectSuggestion}
 		}
-		return Error{Code: ErrPermissionDenied, Message: msg, Suggestion: "ask the property owner to add the service account email to this Search Console property"}
+		return Error{Code: ErrPermissionDenied, Message: msg, Suggestion: "ask the property owner to grant this credential access to this Search Console property"}
 	case 404:
 		return Error{Code: ErrNotFound, Message: msg, Suggestion: "check the site_url or feedpath; use list_sites to see accessible properties"}
 	case 429:
