@@ -64,6 +64,14 @@ Each of the following has broken a real installation. None is optional:
   names a quota project and reads like a permission problem.
 - An empty `gcloud projects list` means the user has no GCP project. Send them
   to https://console.cloud.google.com/projectcreate, then repeat from step 2.
+- `set-quota-project` exiting 1 with `does not have the
+  "serviceusage.services.use" permission on this project` means the Google
+  account you signed in with has no rights on that project. Retrying the same
+  command never clears it. Either sign in again (both logins) with an account
+  that does have rights, or ask the project's administrator to grant the
+  current account `roles/serviceusage.serviceUsageConsumer`. Once granted,
+  re-run `gcloud auth application-default login`: it attaches the quota project
+  by itself, so the `set-quota-project` step may already be satisfied.
 - On Windows, gcloud installed with `winget install Google.CloudSDK` is not on
   the PATH of the current shell. It lives at
   `%LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd`; use that

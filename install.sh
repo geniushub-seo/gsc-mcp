@@ -154,6 +154,10 @@ Next steps (this installer does not run them):
      PROJECT_ID is the id from step 2 - never send the literal placeholder.
      ADC has no project of its own; without this, every query fails with a
      403 that reads like a Search Console permission problem but is not one.
+     If this exits 1 saying the account lacks "serviceusage.services.use",
+     retrying will not help: sign in again with an account that has rights on
+     that project, or have its administrator grant
+     roles/serviceusage.serviceUsageConsumer, then repeat step 3.
 
   5) gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID
      The same id as step 4. A fresh project does not have this API enabled,

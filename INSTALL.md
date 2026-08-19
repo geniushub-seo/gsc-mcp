@@ -131,6 +131,8 @@ gcloud auth application-default set-quota-project PROJECT_ID
 
 This writes `quota_project_id` into ADC JSON, which `gsc-mcp` passes through `option.WithQuotaProject`.
 
+**If this command exits 1** with `does not have the "serviceusage.services.use" permission on this project`, the signed-in account has no rights on that project and retrying will not help. Either repeat both logins with an account that does, or have the project administrator grant the current account `roles/serviceusage.serviceUsageConsumer`; then re-run `gcloud auth application-default login`, which attaches the quota project on its own.
+
 **Symptom of skipping it:** `list_sites` returns 403 `permission_denied` with `requires a quota project`. This is **not** a GSC property-permission problem. Do not ask the user to add another user in Search Console; run the command above.
 
 ### 1d. Enable the Search Console API on that project
