@@ -132,31 +132,47 @@ cat <<EOF >&2
 
 Next steps (this installer does not run them):
 
-  With an AI agent, the agent executes every command below. The user only
-  chooses an account and approves access in the Google browser page opened by
-  gcloud; do not send the user to Terminal.
+  Run these six commands in order. They do not branch. With an AI agent, the
+  agent runs every one of them; the user's only task is choosing a Google
+  account and ticking BOTH consent checkboxes in the browser page gcloud opens.
+  Do not send the user to Terminal.
 
-  Manual installers may run:
+  1) gcloud auth login
+     A separate login from step 3 - both are required. Without this one,
+     step 2 fails with an expired-credentials error.
 
-  1) Sign in with Application Default Credentials (browser):
-     gcloud auth application-default login \\
-       --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+  2) gcloud projects list
+     Copy an id from the PROJECT_ID column; steps 4 and 5 both need it. An
+     empty list means the user has no GCP project: create one at
+     https://console.cloud.google.com/projectcreate, then repeat this step.
 
-  2) Point ADC at a quota project (required — ADC has no project of its own,
-     and without this every query fails with a 403 that looks like a
-     permission problem):
-     gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+  3) gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+     The consent page has TWO checkboxes and both must be ticked, or this
+     fails with "cloud-platform scope is required but not consented".
 
-     Use the GCP project that has the Search Console API enabled:
-     https://console.cloud.google.com/apis/library/searchconsole.googleapis.com
+  4) gcloud auth application-default set-quota-project PROJECT_ID
+     PROJECT_ID is the id from step 2 - never send the literal placeholder.
+     ADC has no project of its own; without this, every query fails with a
+     403 that reads like a Search Console permission problem but is not one.
 
-  3) Wire MCP clients / verify access:
+  5) gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID
+     The same id as step 4. A fresh project does not have this API enabled,
+     and skipping this step is the most common reason setup stalls after a
+     login that appeared to succeed.
+
+  6) gsc-mcp doctor
+     It must print "list_sites OK" before the setup counts as working. Then:
      gsc-mcp setup
+     If the shell reports "command not found", the install directory is not on
+     PATH yet - use the absolute path printed above.
 
-If anything fails, run "gsc-mcp doctor": it checks everything, makes one real
-list_sites call, writes no files, and prints the fix for what it finds.
+doctor is read-only: it runs every check plus one real list_sites call, writes
+no files, and prints the fix for whatever it finds. Run it again after any
+command above that fails.
 
 Need gcloud? https://cloud.google.com/sdk/docs/install
   macOS: brew install --cask google-cloud-sdk
+  A freshly installed gcloud may not be on the PATH of the current shell; open
+  a new terminal, or use the absolute path the installer printed.
 
 EOF

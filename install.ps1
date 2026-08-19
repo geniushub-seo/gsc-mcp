@@ -182,15 +182,24 @@ Original error: $($_.Exception.Message)
 
         Log "installed: $dest"
 
-        $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
-        $onPath = ($env:PATH -split ';' | Where-Object { $_.TrimEnd('\') -ieq $InstallDir.TrimEnd('\') }).Count -gt 0
-        if ($onPath) {
-            Log "PATH: $InstallDir is available"
-        } else {
-            Log "PATH: $InstallDir is not on your PATH. An assisting agent should use the absolute binary path immediately."
-            Log "Manual installers can add it with:"
-            Log "  [Environment]::SetEnvironmentVariable('PATH', `"$userPath;$InstallDir`", 'User')"
-            Log "  then open a new terminal"
+        # The PATH hint is advisory: the binary is installed and checksum-verified
+        # by this point, so nothing here may fail the script. A pipeline that
+        # yields 0 or 1 element is not an array under Set-StrictMode, which is
+        # why .Count used to throw PropertyNotFoundStrict and exit 1 on a
+        # successful install.
+        try {
+            $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
+            $pathDirs = @($env:PATH -split ';' | ForEach-Object { $_.TrimEnd('\') })
+            if ($pathDirs -contains $InstallDir.TrimEnd('\')) {
+                Log "PATH: $InstallDir is available"
+            } else {
+                Log "PATH: $InstallDir is not on your PATH. An assisting agent should use the absolute binary path immediately."
+                Log "Manual installers can add it with:"
+                Log "  [Environment]::SetEnvironmentVariable('PATH', `"$userPath;$InstallDir`", 'User')"
+                Log "  then open a new terminal"
+            }
+        } catch {
+            Log "PATH: check skipped ($($_.Exception.Message)). Use the absolute path: $dest"
         }
     } finally {
         $ProgressPreference = $prevProgress
@@ -202,33 +211,46 @@ Log @"
 
 Next steps (this installer does not run them):
 
-  With an AI agent, the agent executes every command below. The user only
-  chooses an account and approves access in the Google browser page opened by
-  gcloud; do not send the user to Terminal.
+  Run these six commands in order. They do not branch. With an AI agent, the
+  agent runs every one of them; the user's only task is choosing a Google
+  account and ticking BOTH consent checkboxes in the browser page gcloud opens.
+  Do not send the user to Terminal.
 
-  Manual installers may run:
+  1) gcloud auth login
+     A separate login from step 3 — both are required. Without this one,
+     step 2 fails with an expired-credentials error.
 
-  1) Sign in with Application Default Credentials (browser):
-     gcloud auth application-default login ``
-       --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+  2) gcloud projects list
+     Copy an id from the PROJECT_ID column; steps 4 and 5 both need it. An
+     empty list means the user has no GCP project: create one at
+     https://console.cloud.google.com/projectcreate, then repeat this step.
 
-  2) Point ADC at a quota project (required — ADC has no project of its own,
-     and without this every query fails with a 403 that looks like a
-     permission problem):
-     gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+  3) gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+     The consent page has TWO checkboxes and both must be ticked, or this
+     fails with "cloud-platform scope is required but not consented".
 
-     Use the GCP project that has the Search Console API enabled:
-     https://console.cloud.google.com/apis/library/searchconsole.googleapis.com
+  4) gcloud auth application-default set-quota-project PROJECT_ID
+     PROJECT_ID is the id from step 2 — never send the literal placeholder.
+     ADC has no project of its own; without this, every query fails with a
+     403 that reads like a Search Console permission problem but is not one.
 
-  3) Wire MCP clients / verify access:
+  5) gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID
+     The same id as step 4. A fresh project does not have this API enabled,
+     and skipping this step is the most common reason setup stalls after a
+     login that appeared to succeed.
+
+  6) $dest doctor
+     It must print "list_sites OK" before the setup counts as working. Then:
      $dest setup
 
-If anything fails, run "$dest doctor": it checks everything, makes one real
-list_sites call, writes no files, and prints the fix for what it finds.
+doctor is read-only: it runs every check plus one real list_sites call, writes
+no files, and prints the fix for whatever it finds. Run it again after any
+command above that fails.
 
 Need gcloud? https://cloud.google.com/sdk/docs/install
   Windows: winget install Google.CloudSDK
-  If gcloud is installed but "not recognized", it is on disk but not on PATH —
-  it usually lives in %LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin.
+  gcloud installed by winget is NOT on the PATH of the shell that installed it.
+  It lives in %LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd —
+  use that absolute path, or open a new terminal.
 
 "@
