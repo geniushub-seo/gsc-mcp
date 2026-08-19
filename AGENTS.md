@@ -15,7 +15,14 @@ Choose the right path first:
 
 ## Install
 
-### Fast path
+### The whole install is six commands, in this order
+
+Do not improvise an order, and do not jump from the binary to OAuth. Every
+command below is executed by you, the agent, through your terminal tool. The
+user's only task is choosing a Google account and ticking both consent
+checkboxes in the browser page that gcloud opens.
+
+**1. Install the binary.**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.sh | bash
@@ -25,18 +32,55 @@ curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.
 irm https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.ps1 | iex
 ```
 
-Do not jump directly from binary installation to OAuth. First establish these
-facts without reading credential contents:
+The installer prints the absolute path it installed to and does not change
+PATH. Use that absolute path in every later command; do not assume `gsc-mcp`
+resolves.
 
-1. Which MCP client the user wants to configure.
-2. Whether `gcloud --version` works. If not, follow [INSTALL.md](INSTALL.md)
-   step 1a before continuing.
-3. The real GCP project ID where the Search Console API is enabled. If the user
-   has no project, direct them to https://console.cloud.google.com/projectcreate,
-   then to https://console.cloud.google.com/apis/library/searchconsole.googleapis.com.
-4. Whether the same Google account can see at least one property at
-   https://search.google.com/search-console. An empty account is not an MCP
-   installation problem.
+**2. Run these six commands in order.**
+
+```bash
+gcloud auth login
+gcloud projects list
+gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+gcloud auth application-default set-quota-project PROJECT_ID
+gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID
+"$HOME/.local/bin/gsc-mcp" doctor
+```
+
+`PROJECT_ID` is an id from the `gcloud projects list` output. Substitute it
+yourself; never send the literal placeholder, and never ask the user for a
+project id you have not tried to read from that command first.
+
+Each of the following has broken a real installation. None is optional:
+
+- `gcloud auth login` and `gcloud auth application-default login` are two
+  separate logins. The first makes `gcloud projects list` work; the second
+  creates the credentials this server reads. Doing only the second leaves
+  `gcloud projects list` failing with an expired-credentials error.
+- The ADC consent page has **two checkboxes**. Both must be ticked, or the
+  login fails with `cloud-platform scope is required but not consented`.
+- A fresh GCP project does not have the Search Console API enabled, so the
+  `gcloud services enable` step is required. Skipping it produces a 403 that
+  names a quota project and reads like a permission problem.
+- An empty `gcloud projects list` means the user has no GCP project. Send them
+  to https://console.cloud.google.com/projectcreate, then repeat from step 2.
+- On Windows, gcloud installed with `winget install Google.CloudSDK` is not on
+  the PATH of the current shell. It lives at
+  `%LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd`; use that
+  absolute path or open a new shell.
+- An account that sees no property at https://search.google.com/search-console
+  is not an MCP installation problem. Confirm the account before debugging.
+
+**3. When `doctor` prints `list_sites OK`, wire the client.**
+
+Run `gsc-mcp setup`, finish the selected client's configuration, restart that
+client or open a new session, and verify its MCP server list contains `gsc`.
+Only then call `list_sites`. See [INSTALL.md](INSTALL.md) for the full
+client-specific procedure.
+
+If any command fails, run `gsc-mcp doctor` again and read its output before
+changing anything: it runs every check plus one real `list_sites` call, writes
+no files, and prints the fix for what it finds.
 
 ### Browser consent checkpoint: agent owns the terminal
 
@@ -45,34 +89,17 @@ user to open Terminal, copy a command, or paste terminal output back into chat.
 Before starting OAuth, tell the user that a Google sign-in page will open and
 that their only task is to choose an account and approve access. Then run this
 command yourself through the terminal tool with enough time for browser
-consent:
+consent: step 2's `gcloud auth application-default login`.
 
-```bash
-gcloud auth application-default login \
-  --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
-```
-
-Keep the command running while the user completes Google's browser UI. The
+Keep that command running while the user completes Google's browser UI. The
 human owns the consent click; the agent owns command entry, process management,
-and every follow-up command. When the command exits successfully, confirm the
-credential file exists with `ls`, never `cat`, then run the following commands
-yourself:
-
-```bash
-gcloud auth application-default set-quota-project YOUR_PROJECT_ID
-"$HOME/.local/bin/gsc-mcp" doctor
-"$HOME/.local/bin/gsc-mcp" setup
-```
+and every follow-up command. When it exits successfully, confirm the credential
+file exists with `ls`, never `cat`, then continue with the remaining commands
+in step 2.
 
 On Windows, use the absolute path printed by `install.ps1`. On POSIX, the
-absolute path above avoids a false `command not found` when `~/.local/bin` is
-not yet on `PATH`. Replace `YOUR_PROJECT_ID`; never send the placeholder.
-
-`doctor` must print `list_sites OK` before configuration is considered usable.
-After `setup`, finish the selected client's configuration, restart that client
-or open a new session, and verify that its MCP server list contains `gsc`.
-Only then ask the agent to call `list_sites`. See [INSTALL.md](INSTALL.md) for
-the full client-specific procedure.
+absolute `"$HOME/.local/bin/gsc-mcp"` avoids a false `command not found` when
+`~/.local/bin` is not yet on `PATH`.
 
 For Codex, do not use the repository `.mcp.json`; Codex MCP configuration lives
 in `~/.codex/config.toml` or a trusted project's `.codex/config.toml`. The safe
@@ -233,7 +260,7 @@ Diagnose the symptom first instead of inferring a cause.
 
 | Symptom | Actual cause | Do not | Fix |
 |---|---|---|---|
-| 403 containing `requires a quota project` | ADC has no quota project | Ask the user to add a GSC user | `gcloud auth application-default set-quota-project YOUR_PROJECT_ID` |
+| 403 containing `requires a quota project` | ADC has no quota project, and the project it names may not have the API on | Ask the user to add a GSC user | `gcloud auth application-default set-quota-project PROJECT_ID`, then `gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID` |
 | `auth_failed` containing `cannot fetch token` or `invalid_grant` | Refresh token expired | Reinstall the binary | Re-run `application-default login` |
 | `gcloud projects list` says credentials expired immediately after ADC login | It uses a separate token | Re-run `application-default login` | Run `gcloud auth login` |
 | Windows says `gcloud` is not recognized | Installed but absent from PATH | Re-run `winget install` | Use `%LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd` |

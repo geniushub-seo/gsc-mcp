@@ -38,13 +38,17 @@ Terminal. For the login command, tell the user that Google will open in their
 browser; the user only chooses an account and approves access.
 
 ```bash
+gcloud auth login
+gcloud projects list
 gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
-gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+gcloud auth application-default set-quota-project PROJECT_ID
+gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID
+gsc-mcp doctor
 gsc-mcp setup
 ```
 
-The second command is required; see step 1c. After installation, or whenever setup fails, run `gsc-mcp doctor` (a complete, non-writing check plus a real `list_sites` call).
+`PROJECT_ID` is an id from the `gcloud projects list` output; the agent substitutes it and never sends the placeholder. The last four commands are all required: see step 1c for the quota project, step 1d for enabling the API. `doctor` must print `list_sites OK` before `setup` counts as working; run it again after any command above that fails.
 
 ## Responsibility boundary
 
@@ -129,7 +133,25 @@ This writes `quota_project_id` into ADC JSON, which `gsc-mcp` passes through `op
 
 **Symptom of skipping it:** `list_sites` returns 403 `permission_denied` with `requires a quota project`. This is **not** a GSC property-permission problem. Do not ask the user to add another user in Search Console; run the command above.
 
-### 1d. ADC recovery table
+### 1d. Enable the Search Console API on that project
+
+A GCP project does not have the Search Console API enabled by default, and the quota project set in 1c is the one that needs it:
+
+```bash
+gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID
+```
+
+Use the same id as 1c. **Symptom of skipping it:** a 403 whose `Details` block contains `"reason": "SERVICE_DISABLED"`. Setting the quota project again will not clear it.
+
+To check before running it:
+
+```bash
+gcloud services list --enabled --filter=searchconsole.googleapis.com --project=PROJECT_ID
+```
+
+Empty output means the API is not enabled on that project.
+
+### 1e. ADC recovery table
 
 Use this table as an agent. Start with the symptom and issue the listed fix; misdiagnosis leads to useless permission changes, reinstalls, or environment variables.
 
