@@ -33,10 +33,14 @@ if ! printf '%s\n' "${doctor_output}" | grep -Eq 'list_sites OK.*[1-9][0-9]* pro
   log "AGENT ACTION REQUIRED: doctor did not confirm a non-empty list_sites result."
   log "The agent must run the commands below through its own terminal tool."
   log "The user only chooses an account and approves access in Google's browser page; do not send the user to Terminal."
-  log "Replace YOUR_PROJECT_ID with a verified project ID, then rerun this script:"
+  log "Run these in order, substituting an id from step 2 for PROJECT_ID, then rerun this script:"
+  log "  gcloud auth login"
+  log "  gcloud projects list"
   log "  gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform"
-  log "  gcloud auth application-default set-quota-project YOUR_PROJECT_ID"
+  log "  gcloud auth application-default set-quota-project PROJECT_ID"
+  log "  gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID"
   log "  bash ${script_dir}/setup.sh"
+  log "The two logins are separate and both are required; the consent page has two checkboxes and both must be ticked."
   exit 2
 fi
 

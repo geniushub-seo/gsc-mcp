@@ -50,11 +50,16 @@ Execution rules:
    default to sending me to Terminal.
 8. After OAuth succeeds, verify only that ADC exists without reading it, then
    continue automatically. Do not wait for me to copy terminal success text.
-9. Obtain a real GCP project ID, confirm that the Search Console API is enabled
-   in that project, and set it as the ADC quota project. Never execute a
-   command containing the literal placeholder YOUR_PROJECT_ID. If the project
-   ID cannot be determined safely, ask me to choose from human-readable options
-   or provide the ID; once known, you execute the terminal command.
+9. Obtain a real GCP project ID by running gcloud auth login and then
+   gcloud projects list yourself — do not ask me for an ID before you have run
+   that command, and never execute a command containing the literal
+   placeholder PROJECT_ID. Set it as the ADC quota project, then enable the API
+   on that same project with
+   gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID.
+   A newly created project never has it enabled, and skipping this returns a
+   403 whose details contain "reason": "SERVICE_DISABLED". If the list is empty
+   I have no project: send me to the project creation page. If it has several,
+   ask me to choose from the ids you read.
 10. After I complete a human checkpoint, resume from that checkpoint. Do not
    repeat steps that already passed their verification.
 11. Perform read-only GSC verification only. Do not submit or delete sitemaps

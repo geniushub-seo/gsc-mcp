@@ -121,12 +121,12 @@ On Windows the path is `%APPDATA%\gcloud\application_default_credentials.json`. 
 
 ADC belongs to a personal account, not a GCP project. Google therefore needs an explicit project to charge this request's quota to. A service-account key embeds project information; ADC does not.
 
-The agent runs this itself, replacing `YOUR_PROJECT_ID` with the verified
-lowercase project ID where the Search Console API is enabled (not its display
-name). Never send the placeholder to the user as a command:
+The agent runs this itself, replacing `PROJECT_ID` with an id read from
+`gcloud projects list` (the lowercase project ID, not its display name). Never
+send the placeholder to the user as a command:
 
 ```bash
-gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+gcloud auth application-default set-quota-project PROJECT_ID
 ```
 
 This writes `quota_project_id` into ADC JSON, which `gsc-mcp` passes through `option.WithQuotaProject`.

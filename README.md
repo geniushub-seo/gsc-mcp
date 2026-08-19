@@ -48,9 +48,12 @@ or copy shell commands.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.sh | bash
+gcloud auth login
+gcloud projects list
 gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
-gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+gcloud auth application-default set-quota-project PROJECT_ID
+gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID
 "$HOME/.local/bin/gsc-mcp" doctor
 "$HOME/.local/bin/gsc-mcp" setup
 ```
@@ -59,8 +62,11 @@ gcloud auth application-default set-quota-project YOUR_PROJECT_ID
 
 ```powershell
 irm https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.ps1 | iex
+gcloud auth login
+gcloud projects list
 gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
-gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+gcloud auth application-default set-quota-project PROJECT_ID
+gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID
 $GscMcp = Join-Path $env:LOCALAPPDATA 'Programs\gsc-mcp\gsc-mcp.exe'
 & $GscMcp doctor
 & $GscMcp setup
@@ -73,7 +79,7 @@ when the install directory is not on `PATH`. If `command -v gsc-mcp` (or
 `Get-Command gsc-mcp` on Windows) succeeds, the shorter `gsc-mcp` command is
 also fine.
 
-Replace `YOUR_PROJECT_ID` with the GCP project where you enabled the Search Console API. **Do not skip that line.** ADC is your personal account and belongs to no project, so without a quota project every query fails with a 403 that reads exactly like a permissions problem and isn't one.
+Replace `PROJECT_ID` with an id from the `gcloud projects list` output above; never run the literal placeholder. **Neither of those two lines is optional.** ADC is your personal account and belongs to no project, so without a quota project every query fails with a 403 that reads exactly like a permissions problem and isn't one — and a project that has never enabled the Search Console API returns the same 403 with `"reason": "SERVICE_DISABLED"` in its details, which is what `gcloud services enable` clears. `gcloud auth login` is a separate login from the ADC one: without it, `gcloud projects list` reports expired credentials.
 
 If any step misbehaves, run the installed binary with `doctor` (for example,
 `"$HOME/.local/bin/gsc-mcp" doctor`): every check plus one real `list_sites`
@@ -110,10 +116,10 @@ opens.
    - Windows: `winget install Google.CloudSDK`, or download [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe)
    - **Warning:** do not just unpack the tarball without running `install.sh`. The bundled Python never gets installed, the launcher falls back to your system `python3` (macOS ships 3.9; gcloud needs 3.10–3.14), and the resulting error looks like a bug in this project. That 713 MB is the Google Cloud SDK, not gsc-mcp.
 2. **Create or select a GCP project.** If none exists, use the [project creation page](https://console.cloud.google.com/projectcreate). Copy the project ID, not the display name. You need permission to enable APIs and use that project for quota; otherwise ask its administrator.
-3. **Enable the Search Console API** if you haven't: hit Enable in the [API Library](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com). Check the project picker top-left first.
+3. **Enable the Search Console API** on that project — `gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID`, or hit Enable in the [API Library](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com) after checking the project picker top-left. A newly created project never has it on.
 4. **Confirm GSC access.** Open [Search Console](https://search.google.com/search-console) with the same Google account and confirm that at least one property is visible.
 5. **Sign in with ADC** (opens a browser) — during agent-assisted setup, the agent runs the login command and waits; the user only completes Google's browser consent.
-6. **Set the quota project** — the agent replaces `YOUR_PROJECT_ID` with the ID from step 2 and runs the command. Required under ADC; skipping it means a 403 on every query.
+6. **Set the quota project** — the agent replaces `PROJECT_ID` with the ID from step 2 and runs the command. Required under ADC; skipping it means a 403 on every query.
 7. **Run `gsc-mcp doctor`** — the agent runs it and requires an explicit `list_sites OK` line. Do not infer success only from the presence of the credential file.
 8. **Run `gsc-mcp setup`** — the agent runs it, then finishes the client-specific step below. `setup` can merge Claude Desktop, Cursor, and an existing project `.mcp.json`; it prints manual instructions for clients it does not configure directly.
 9. Restart the MCP client or start a new session, then call `list_sites` from the agent.

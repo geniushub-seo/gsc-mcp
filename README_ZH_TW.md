@@ -19,9 +19,13 @@
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.sh | bash
+gcloud auth login
+gcloud projects list
 gcloud auth application-default login \
   --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
-gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+gcloud auth application-default set-quota-project PROJECT_ID
+gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID
+gsc-mcp doctor
 gsc-mcp setup
 ```
 
@@ -29,14 +33,18 @@ gsc-mcp setup
 
 ```powershell
 irm https://raw.githubusercontent.com/geniushub-seo/gsc-mcp/main/install.ps1 | iex
+gcloud auth login
+gcloud projects list
 gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
-gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+gcloud auth application-default set-quota-project PROJECT_ID
+gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID
+gsc-mcp doctor
 gsc-mcp setup
 ```
 
 安裝腳本會下載對應平台 binary、**驗證 SHA-256**、裝到 `~/.local/bin`（Windows 是 `%LOCALAPPDATA%\Programs\gsc-mcp`），並解除 macOS quarantine / Windows SmartScreen 封鎖標記。若由 AI agent 協助，所有終端指令（包括啟動 gcloud 登入）都由 agent 執行；使用者只需在自動開啟的 Google 網頁選帳號並按下允許，不必開啟終端或複製指令。詳見 [INSTALL.md](INSTALL.md) 與 [Releases](https://github.com/geniushub-seo/gsc-mcp/releases)。
 
-`YOUR_PROJECT_ID` 換成你啟用 Search Console API 的 GCP 專案 ID。**這行不能省**——ADC 是個人帳號、不隸屬任何專案，少了它所有查詢會回 403 `requires a quota project`，看起來很像權限問題但不是。
+`PROJECT_ID` 換成 `gcloud projects list` 輸出裡的專案 ID，不要把佔位字原樣送出。**那兩行都不能省**——ADC 是個人帳號、不隸屬任何專案，少了 quota project 所有查詢會回 403 `requires a quota project`，看起來很像權限問題但不是；而全新的專案本來就沒有啟用 Search Console API，少了 `gcloud services enable` 會回同一個 403、細節裡寫 `"reason": "SERVICE_DISABLED"`。另外 `gcloud auth login` 跟 ADC 登入是兩次獨立登入，少了它 `gcloud projects list` 會說憑證過期。
 
 裝完有任何一步不順，跑 `gsc-mcp doctor`——完整檢查加一次真實 `list_sites`，不寫任何檔案。
 
