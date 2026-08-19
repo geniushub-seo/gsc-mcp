@@ -84,7 +84,15 @@ func Run(opts Options) (Result, error) {
 	}
 	logf("binary: %s", bin)
 	if opts.DryRun {
-		logf("mode: dry-run (no files will be modified)")
+		// doctor sets DryRun and LiveCheck together. Calling that "dry-run"
+		// reads as "a real run is still pending", and an assisting agent then
+		// hunts for the command that would perform it. There is none: doctor
+		// is the whole check.
+		if opts.LiveCheck {
+			logf("mode: read-only (diagnostic — no files will be modified)")
+		} else {
+			logf("mode: dry-run (no files will be modified)")
+		}
 	}
 
 	// 1. gcloud
