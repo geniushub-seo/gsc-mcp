@@ -85,7 +85,11 @@ the user's setup would technically support it.
 
 ### 1a. Install gcloud if absent
 
-- macOS: `brew install --cask google-cloud-sdk`
+- macOS with homebrew: `brew install --cask google-cloud-sdk`
+- macOS without homebrew: **do not install homebrew for this.** Its installer
+  requires the account to be a local Administrator and stops at `Need sudo access
+  on macOS` otherwise, which is common on managed laptops. Follow *No-homebrew
+  macOS* below instead.
 - Linux:
   ```bash
   curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-latest-linux-x86_64.tar.gz
@@ -95,7 +99,35 @@ the user's setup would technically support it.
   Or use the distribution's `google-cloud-sdk` package.
 - Windows: `winget install Google.CloudSDK`, or download [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe).
 
-**Warning:** do not only unpack the tarball. Without its `install.sh`, bundled Python is not installed and the launcher falls back to system `python3` (macOS ships 3.9; gcloud requires 3.10–3.14). The resulting error looks like a `gsc-mcp` problem. The ~713 MB download is the Google Cloud SDK, not this project.
+The ~713 MB download is the Google Cloud SDK, not this project.
+
+**No-homebrew macOS.** gcloud is written in Python and needs 3.10+. macOS ships
+`/usr/bin/python3` 3.9.6, and `install.sh` is itself a Python program, so running
+it does not fix this — it aborts with `TypeError: unsupported operand type(s) for
+|`. There is no bundled-python tarball for macOS. Provide a Python first:
+
+```bash
+# 1. locate a python3 >= 3.10
+for p in python3.13 python3.12 python3.11 python3.10 "$HOME"/.local/share/uv/python/*/bin/python3; do
+  c=$(command -v "$p" 2>/dev/null) || { [ -x "$p" ] && c="$p"; } || continue
+  "$c" -c 'import sys;sys.exit(0 if sys.version_info>=(3,10) else 1)' 2>/dev/null && { echo "FOUND: $c"; break; }
+done
+
+# 2. none found: install one with uv (no Administrator rights needed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+"$HOME/.local/bin/uv" python install 3.12   # then rerun step 1 for the path
+
+# 3. install gcloud with it (Intel Mac: replace darwin-arm with darwin-x86_64)
+export CLOUDSDK_PYTHON=<path from step 1>
+tmp=$(mktemp -d)
+curl -fsSL https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-darwin-arm.tar.gz -o "$tmp/gcloud.tar.gz"
+mkdir -p "$HOME/.local/share" && tar -xzf "$tmp/gcloud.tar.gz" -C "$HOME/.local/share"
+"$HOME/.local/share/google-cloud-sdk/install.sh" --quiet --path-update=false
+```
+
+Installed this way, **every subsequent gcloud command must carry
+`CLOUDSDK_PYTHON`** (export it in the shell profile, or prefix each command).
+A homebrew install does not need it.
 
 The agent is responsible for starting commands that open a browser. Tell the
 user what browser interaction is about to occur, then execute the command and

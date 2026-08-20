@@ -111,10 +111,33 @@ opens.
 ### Doing it by hand (after the binary is installed)
 
 1. **Install gcloud** (once):
-   - macOS: `brew install --cask google-cloud-sdk`
+   - macOS with homebrew: `brew install --cask google-cloud-sdk`
+   - macOS without homebrew: **do not install homebrew for this.** Its installer requires a local Administrator account and stops at `Need sudo access on macOS`, which is common on managed laptops. See *No-homebrew macOS* below.
    - Linux: `curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-latest-linux-x86_64.tar.gz && tar -xf google-cloud-cli-latest-linux-x86_64.tar.gz && ./google-cloud-sdk/install.sh` (or your distro's `google-cloud-sdk` package)
    - Windows: `winget install Google.CloudSDK`, or download [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe)
-   - **Warning:** do not just unpack the tarball without running `install.sh`. The bundled Python never gets installed, the launcher falls back to your system `python3` (macOS ships 3.9; gcloud needs 3.10–3.14), and the resulting error looks like a bug in this project. That 713 MB is the Google Cloud SDK, not gsc-mcp.
+   - That 713 MB is the Google Cloud SDK, not gsc-mcp.
+
+   **No-homebrew macOS** — gcloud is written in Python and needs 3.10+. macOS ships `/usr/bin/python3` 3.9.6, and `install.sh` is itself a Python program, so running it does not fix this — it aborts with `TypeError: unsupported operand type(s) for |`. There is no bundled-python tarball for macOS. Provide a Python first:
+   ```bash
+   # 1. locate a python3 >= 3.10
+   for p in python3.13 python3.12 python3.11 python3.10 "$HOME"/.local/share/uv/python/*/bin/python3; do
+     c=$(command -v "$p" 2>/dev/null) || { [ -x "$p" ] && c="$p"; } || continue
+     "$c" -c 'import sys;sys.exit(0 if sys.version_info>=(3,10) else 1)' 2>/dev/null && { echo "FOUND: $c"; break; }
+   done
+
+   # 2. none found: install one with uv (no Administrator rights needed), then rerun step 1
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   "$HOME/.local/bin/uv" python install 3.12
+
+   # 3. install gcloud with it (Intel Mac: replace darwin-arm with darwin-x86_64)
+   export CLOUDSDK_PYTHON=<path from step 1>
+   tmp=$(mktemp -d)
+   curl -fsSL https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-darwin-arm.tar.gz -o "$tmp/gcloud.tar.gz"
+   mkdir -p "$HOME/.local/share" && tar -xzf "$tmp/gcloud.tar.gz" -C "$HOME/.local/share"
+   "$HOME/.local/share/google-cloud-sdk/install.sh" --quiet --path-update=false
+   ```
+
+   Installed this way, **every gcloud command below must carry `CLOUDSDK_PYTHON`** (export it in your shell profile, or prefix each command). A homebrew install does not need it.
 2. **Create or select a GCP project.** If none exists, use the [project creation page](https://console.cloud.google.com/projectcreate). Copy the project ID, not the display name. You need permission to enable APIs and use that project for quota; otherwise ask its administrator.
 3. **Enable the Search Console API** on that project — `gcloud services enable searchconsole.googleapis.com --project=PROJECT_ID`, or hit Enable in the [API Library](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com) after checking the project picker top-left. A newly created project never has it on.
 4. **Confirm GSC access.** Open [Search Console](https://search.google.com/search-console) with the same Google account and confirm that at least one property is visible.

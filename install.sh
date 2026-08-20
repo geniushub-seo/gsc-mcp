@@ -175,7 +175,13 @@ no files, and prints the fix for whatever it finds. Run it again after any
 command above that fails.
 
 Need gcloud? https://cloud.google.com/sdk/docs/install
-  macOS: brew install --cask google-cloud-sdk
+  macOS with homebrew:    brew install --cask google-cloud-sdk
+  macOS without homebrew: do NOT install homebrew for this - its installer
+  requires a local Administrator account. gcloud needs Python 3.10+, macOS
+  ships 3.9.6, and install.sh is itself a Python program, so running it does
+  not fix this. Set CLOUDSDK_PYTHON to a Python 3.10+ interpreter first
+  (uv python install 3.12 needs no Administrator rights). Full steps are in
+  INSTALL.md, section "No-homebrew macOS".
   A freshly installed gcloud may not be on the PATH of the current shell; open
   a new terminal, or use the absolute path the installer printed.
 

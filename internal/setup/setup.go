@@ -366,7 +366,8 @@ func checkGcloud(logf func(string, ...any)) string {
 		}
 		switch goos {
 		case "darwin":
-			logf("      brew install --cask google-cloud-sdk")
+			logf("      with homebrew:    brew install --cask google-cloud-sdk")
+			logf("      without homebrew: see INSTALL.md, section \"No-homebrew macOS\"")
 		case "linux":
 			logf("      https://cloud.google.com/sdk/docs/install#linux")
 		case "windows":
@@ -407,7 +408,13 @@ func printGcloudInstallInstructions(logf func(string, ...any)) {
 	logf("  Install Google Cloud SDK (~713 MB download from Google), then re-run setup:")
 	switch goos {
 	case "darwin":
-		logf("    brew install --cask google-cloud-sdk")
+		logf("    with homebrew:    brew install --cask google-cloud-sdk")
+		logf("    without homebrew: do NOT install homebrew for this — its installer requires")
+		logf("      a local Administrator account and stops at \"Need sudo access on macOS\".")
+		logf("      gcloud needs Python 3.10+, macOS ships 3.9.6, and install.sh is itself a")
+		logf("      Python program, so running it does not fix this. Point CLOUDSDK_PYTHON at")
+		logf("      a Python 3.10+ first; uv python install 3.12 needs no Administrator rights.")
+		logf("      Full steps: INSTALL.md, section \"No-homebrew macOS\".")
 	case "linux":
 		logf("    curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-latest-linux-x86_64.tar.gz")
 		logf("    tar -xf google-cloud-cli-latest-linux-x86_64.tar.gz && ./google-cloud-sdk/install.sh")
@@ -418,7 +425,8 @@ func printGcloudInstallInstructions(logf func(string, ...any)) {
 	default:
 		logf("    https://cloud.google.com/sdk/docs/install")
 	}
-	logf("  Warning: do not just extract a tarball without running install.sh — bundled Python will not be set up and gcloud may fail with a system Python version error.")
+	logf("  Warning: always run install.sh after extracting a tarball. On macOS it additionally")
+	logf("  needs CLOUDSDK_PYTHON set to a Python 3.10+ interpreter, or it aborts on system python3.")
 }
 
 // gcloudCandidates lists install locations to probe when gcloud is not in PATH.

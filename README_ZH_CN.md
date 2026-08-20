@@ -57,10 +57,33 @@ gsc-mcp setup
 ### 手动操作（二进制文件已安装之后）
 
 1. **安装 gcloud**（一次性）：
-   - macOS：`brew install --cask google-cloud-sdk`
+   - macOS（已有 homebrew）：`brew install --cask google-cloud-sdk`
+   - macOS（没有 homebrew）：**不要为此去装 homebrew**——装它要求你的账号是本机管理员，公司配发的电脑常常不是，会停在 `Need sudo access on macOS`。改看下方「没有 homebrew 的 macOS」。
    - Linux：`curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-latest-linux-x86_64.tar.gz && tar -xf google-cloud-cli-latest-linux-x86_64.tar.gz && ./google-cloud-sdk/install.sh`（或使用发行版自带的 `google-cloud-sdk` 包）
    - Windows：`winget install Google.CloudSDK`，或下载 [GoogleCloudSDKInstaller.exe](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe)
-   - **注意**：不要只解压 tarball 而不运行 `install.sh`——这样内置的 Python 不会被安装，启动脚本会退回到系统的 `python3`（macOS 自带 3.9，而 gcloud 需要 3.10–3.14），报出来的错误看起来像是本项目的 bug。那 713 MB 是 Google Cloud SDK 的体积，不是本项目的。
+   - 那 713 MB 是 Google Cloud SDK 的体积，不是本项目的。
+
+   **没有 homebrew 的 macOS**——gcloud 是 Python 写的，而 macOS 自带的 `/usr/bin/python3` 是 3.9.6，低于 gcloud 要求的 3.10。连 `install.sh` 自己都跑不起来（它本身就是 Python 程序），所以不是「解压后补跑 install.sh」就能解决，得先准备一个够新的 Python：
+   ```bash
+   # 1. 找一个 3.10 以上的 python3
+   for p in python3.13 python3.12 python3.11 python3.10 "$HOME"/.local/share/uv/python/*/bin/python3; do
+     c=$(command -v "$p" 2>/dev/null) || { [ -x "$p" ] && c="$p"; } || continue
+     "$c" -c 'import sys;sys.exit(0 if sys.version_info>=(3,10) else 1)' 2>/dev/null && { echo "FOUND: $c"; break; }
+   done
+
+   # 2. 找不到就用 uv 装一个（不需要管理员权限），装完重跑步骤 1 取得路径
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   "$HOME/.local/bin/uv" python install 3.12
+
+   # 3. 用它安装 gcloud（Intel Mac 把 darwin-arm 换成 darwin-x86_64）
+   export CLOUDSDK_PYTHON=<步骤 1 找到的路径>
+   tmp=$(mktemp -d)
+   curl -fsSL https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-darwin-arm.tar.gz -o "$tmp/gcloud.tar.gz"
+   mkdir -p "$HOME/.local/share" && tar -xzf "$tmp/gcloud.tar.gz" -C "$HOME/.local/share"
+   "$HOME/.local/share/google-cloud-sdk/install.sh" --quiet --path-update=false
+   ```
+
+   这条路装好之后，**下面每一条 gcloud 命令都要带着 `CLOUDSDK_PYTHON`**（写进 shell profile 或逐条 `export`）。用 homebrew 装的则不需要。
 2. **启用 Search Console API**（如果还没启用）：在 [API Library](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com) 点 Enable。先确认左上角选中的是你要用的项目，并记下它的项目 ID（小写那串，不是显示名称）。
 3. **ADC 登录**（会打开浏览器）——上面第二行。
 4. **设置 quota project**——上面第三行。ADC 必做，漏掉每次查询都会 403。
