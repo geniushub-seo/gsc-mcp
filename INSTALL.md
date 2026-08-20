@@ -68,7 +68,18 @@ gsc-mcp setup
 3. Does ADC already exist? Check without reading its contents. If it does not,
    the agent starts `gcloud auth application-default login` itself.
 
-For an explicit CI or headless requirement, use **Advanced: service account** at the end of this document.
+**Do not present the user with a choice of credential type.** ADC is the only path
+you propose, configure, or explain. Do not mention, list, or compare service accounts
+unless the user first says one of the following:
+
+- they already hold a service-account JSON key,
+- this runs in CI or on a headless machine,
+- no browser can be opened on the target machine,
+- a non-human identity is required.
+
+Only then read **Advanced: service account** at the end of this document. Absent one
+of those statements, a service account is out of scope for the installation, even if
+the user's setup would technically support it.
 
 ## Step 1: gcloud and ADC login
 
@@ -383,14 +394,18 @@ For service accounts, `GSC_ENABLE_WRITE=true` upgrades the scope to `webmasters`
 
 ## Environment variable quick reference
 
+These are the only variables an ADC installation ever needs. ADC itself needs none
+of them — an ADC `mcpServers` entry carries no `env` block at all (step 3).
+
 | Variable | Purpose |
 |---|---|
-| None | ADC requires no credential environment variable. |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Override the ADC credential-file path. |
-| `GOOGLE_SERVICE_ACCOUNT_FILE` | Service-account key file. |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | Inline JSON for CI. |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Override the ADC credential-file path. Rarely needed. |
 | `GSC_LOG_LEVEL` | `warn` is a useful default. |
-| `GSC_ENABLE_WRITE` | Local write gate for every credential type. Also upgrades the requested scope for service accounts. ADC still needs a `webmasters` token. |
-| `GSC_ALLOW_DESTRUCTIVE` | Permits delete. |
+| `GSC_ENABLE_WRITE` | Local write gate for every credential type. Under ADC the token must also carry `webmasters` scope (see "ADC writes require re-login with write scope"). |
+| `GSC_ALLOW_DESTRUCTIVE` | Permits delete. Requires `GSC_ENABLE_WRITE=true`. |
+
+Service-account variables are deliberately not listed here; they belong to
+**Advanced: service account** above and are only in scope once the user has stated
+one of the conditions in step 0.
 
 See [README.md](README.md) and [SPEC.md](SPEC.md) section 4 for full details.

@@ -165,17 +165,20 @@ gcloud auth application-default login \
 
 ## Environment variables
 
+ADC needs no credential variable at all — install it as described above and the
+binary reads `~/.config/gcloud/application_default_credentials.json` on its own.
+Everything below is optional.
+
 | Variable | Default | What it does |
 |---|---|---|
-| `GOOGLE_APPLICATION_CREDENTIALS` | — | Official ADC path override (precedence 2) |
-| `GOOGLE_SERVICE_ACCOUNT_FILE` | — | Path to a service account key (precedence 3) |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | — | Inline JSON (precedence 4, handy in CI) |
-| `GSC_ENABLE_WRITE` | `false` | Local write gate for `submit` (all credential types). Service accounts also upgrade the requested scope to `webmasters`. ADC still needs a `webmasters` token from login. |
-| `GSC_ALLOW_DESTRUCTIVE` | `false` | Allows `delete`; requires `GSC_ENABLE_WRITE=true` as well (all credential types) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | — | Override the ADC credential-file path; unnecessary when the default path works |
+| `GSC_ENABLE_WRITE` | `false` | Local write gate for `submit`. Under ADC the token must also carry `webmasters` scope (see [Writes](#writes-sitemap-submitdelete)) |
+| `GSC_ALLOW_DESTRUCTIVE` | `false` | Allows `delete`; requires `GSC_ENABLE_WRITE=true` as well |
 | `GSC_REQUEST_TIMEOUT` | `30s` | Timeout for a single API call |
 | `GSC_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 
-Credential precedence: `--credentials-file` (alias `--service-account-file`) → `GOOGLE_APPLICATION_CREDENTIALS` → `GOOGLE_SERVICE_ACCOUNT_FILE` → `GOOGLE_SERVICE_ACCOUNT_JSON` → `.env` → **the default ADC path**.
+Service-account variables and the full credential precedence live in
+**Advanced: service account (headless / CI)** below; a normal install does not need them.
 
 ### macOS Gatekeeper
 
@@ -183,7 +186,15 @@ Credential precedence: `--credentials-file` (alias `--service-account-file`) →
 
 ## Advanced: service account (headless / CI)
 
-For non-human identities, CI, or anywhere a personal Google login isn't possible.
+**Most users do not need this section.** Take this path only when one of the following
+holds: you already have a service-account JSON key, this runs in CI or on an unattended
+machine, no browser can be opened on the target machine, or a non-human identity is
+required. Otherwise use ADC above — it never asks you to add a user to a property.
+
+The cost, stated up front: a service account is a machine identity that GSC does not
+recognise on its own, so its `client_email` must be added as a user on **every** property
+you want to query. What you get back is simpler writes — `GSC_ENABLE_WRITE=true` upgrades
+the scope to `webmasters` directly, with no repeat of the login flow ADC requires.
 
 1. Enable the Search Console API in GCP → create a service account → download the JSON key.
 2. Add its `client_email` as a user on **every** property in Search Console.
@@ -206,6 +217,19 @@ For non-human identities, CI, or anywhere a personal Google login isn't possible
 mkdir -p ~/.config/gsc-mcp && chmod 700 ~/.config/gsc-mcp
 chmod 600 ~/.config/gsc-mcp/service-account.json
 ```
+
+### Service-account variables and credential precedence
+
+| Variable | What it does |
+|---|---|
+| `GOOGLE_SERVICE_ACCOUNT_FILE` | Path to the key file |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Inline JSON, for CI systems that store secrets as strings |
+
+Full precedence — the first five layers are all explicit, and only when none is set
+does the binary fall back to ADC: `--credentials-file` (alias `--service-account-file`)
+→ `GOOGLE_APPLICATION_CREDENTIALS` → `GOOGLE_SERVICE_ACCOUNT_FILE`
+→ `GOOGLE_SERVICE_ACCOUNT_JSON` → `.env` → **the default ADC path**.
+See [SPEC.md](SPEC.md) section 4.2 for the authoritative definition.
 
 ## Agent-native onboarding
 

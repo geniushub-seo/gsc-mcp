@@ -108,17 +108,18 @@ gcloud auth application-default login \
 
 ## 環境變數
 
+ADC 不需要設任何憑證變數——照上面裝好，binary 會自己讀
+`~/.config/gcloud/application_default_credentials.json`。下表全部是選填。
+
 | 變數 | 預設 | 說明 |
 |---|---|---|
-| `GOOGLE_APPLICATION_CREDENTIALS` | — | 官方 ADC 路徑覆寫（優先序 2） |
-| `GOOGLE_SERVICE_ACCOUNT_FILE` | — | service account key 路徑（優先序 3） |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | — | inline JSON（優先序 4，適合 CI） |
-| `GSC_ENABLE_WRITE` | `false` | 本地寫入閘門，允許 `submit`（所有憑證類型）。service account 同時把請求的 scope 升級為 `webmasters`。ADC 仍需登入時就帶 `webmasters` token。 |
-| `GSC_ALLOW_DESTRUCTIVE` | `false` | 允許 `delete`；需同時 `GSC_ENABLE_WRITE=true`（所有憑證類型） |
+| `GOOGLE_APPLICATION_CREDENTIALS` | — | 覆寫 ADC 憑證檔路徑；預設路徑可用時不需要設 |
+| `GSC_ENABLE_WRITE` | `false` | 本地寫入閘門，允許 `submit`。ADC 另需 token 本身帶 `webmasters` scope（見上方「寫入（submit / delete sitemap）與 ADC」） |
+| `GSC_ALLOW_DESTRUCTIVE` | `false` | 允許 `delete`；需同時 `GSC_ENABLE_WRITE=true` |
 | `GSC_REQUEST_TIMEOUT` | `30s` | 單次 API 呼叫 timeout |
 | `GSC_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 
-憑證優先序：`--credentials-file`（別名 `--service-account-file`）→ `GOOGLE_APPLICATION_CREDENTIALS` → `GOOGLE_SERVICE_ACCOUNT_FILE` → `GOOGLE_SERVICE_ACCOUNT_JSON` → `.env` → **ADC 預設路徑**。
+service account 的憑證變數與完整優先序見下方「進階：service account（headless / CI）」；一般安裝不需要。
 
 ### macOS Gatekeeper
 
@@ -126,7 +127,13 @@ gcloud auth application-default login \
 
 ## 進階：service account（headless / CI）
 
-適用非人類身分、CI、或無法使用個人 Google 登入的情況。
+**一般使用者不需要這節。** 只有下列情況才走這條路：手上已經有 service account JSON
+key、跑在 CI 或無人機器上、目標機器開不了瀏覽器、或需要非人類身分。否則請用上方的
+ADC——它不必為每個 property 加使用者。
+
+代價先講明：service account 是機器帳號，GSC 不會自動認它，**每一個**要查的 property
+都得手動把它的 `client_email` 加成使用者。換來的是寫入比 ADC 單純：`GSC_ENABLE_WRITE=true`
+會直接把 scope 升級為 `webmasters`，不必像 ADC 那樣重跑登入。
 
 1. GCP 啟用 Search Console API → 建 service account → 下載 JSON key。
 2. 到 Search Console **每個** property 把 `client_email` 加成使用者。
@@ -149,6 +156,18 @@ gcloud auth application-default login \
 mkdir -p ~/.config/gsc-mcp && chmod 700 ~/.config/gsc-mcp
 chmod 600 ~/.config/gsc-mcp/service-account.json
 ```
+
+### service account 專用變數與憑證優先序
+
+| 變數 | 說明 |
+|---|---|
+| `GOOGLE_SERVICE_ACCOUNT_FILE` | key 檔路徑 |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | inline JSON，適合把密鑰存成字串的 CI |
+
+完整優先序（前五層都是顯式指定，全都沒設才落到 ADC）：`--credentials-file`
+（別名 `--service-account-file`）→ `GOOGLE_APPLICATION_CREDENTIALS` →
+`GOOGLE_SERVICE_ACCOUNT_FILE` → `GOOGLE_SERVICE_ACCOUNT_JSON` → `.env` →
+**ADC 預設路徑**。權威定義見 [SPEC.md](SPEC.md) §4.2。
 
 ## 各 agent 的原生上手方式
 
