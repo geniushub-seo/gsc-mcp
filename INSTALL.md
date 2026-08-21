@@ -440,4 +440,4 @@ Service-account variables are deliberately not listed here; they belong to
 **Advanced: service account** above and are only in scope once the user has stated
 one of the conditions in step 0.
 
-See [README.md](README.md) and [SPEC.md](SPEC.md) section 4 for full details.
+See [README_EN.md](README_EN.md) and [SPEC.md](SPEC.md) section 4 for full details.
