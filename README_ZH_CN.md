@@ -9,6 +9,14 @@
 
 [繁體中文](README.md) | [English](README_EN.md) | 简体中文
 
+<p align="center">
+  <a href="#一行安装">安装</a> ·
+  <a href="#工具清单">工具清单</a> ·
+  <a href="SPEC.md">技术规格</a> ·
+  <a href="https://geniushub.cc/seo/">SEO / GEO 服务</a> ·
+  <a href="https://www.youtube.com/@super-simple-marketing">YouTube</a>
+</p>
+
 </div>
 
 为 SEO 与内容团队设计：用你自己的 Google 账号登录（ADC），本地 agent（Claude Code / Codex / Cursor / Hermes）就能查询你本来就有权限的 Search Console 数据——**不必**为每个资源（property）单独添加 service account。
@@ -266,6 +274,10 @@ go test ./... && go vet ./... && golangci-lint run
 
 <div align="center">
 
-由 **[万智汇 Genius Hub](https://geniushub.cc/)** 开发 · 采用 MIT 许可
+由 **[万智汇 Genius Hub](https://geniushub.cc/seo/)** 开发，在我们自己的 SEO 与
+GEO 客户项目里每天在跑 · 采用 MIT 许可
+
+SEO 与 GEO（让 AI 回答时引用你的内容）实践分享 →
+**[Super Simple Marketing](https://www.youtube.com/@super-simple-marketing)**
 
 </div>

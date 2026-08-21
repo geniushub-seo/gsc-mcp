@@ -9,6 +9,14 @@
 
 [繁體中文](README.md) | English | [简体中文](README_ZH_CN.md)
 
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#tools">Tools</a> ·
+  <a href="SPEC.md">Spec</a> ·
+  <a href="https://geniushub.cc/seo/">SEO / GEO services</a> ·
+  <a href="https://www.youtube.com/@super-simple-marketing">YouTube</a>
+</p>
+
 </div>
 
 Built for SEO and content teams. Sign in once with your own Google account (ADC), and your local agent — Claude Code, Codex, Cursor, or Hermes — can query the Search Console data you already have access to. You do **not** need to add a service account to every property.
@@ -342,6 +350,10 @@ go test ./... && go vet ./... && golangci-lint run
 
 <div align="center">
 
-Built by **[Genius Hub](https://geniushub.cc/)** · Licensed under MIT
+Built by **[Genius Hub](https://geniushub.cc/seo/)**, an SEO / GEO agency, and run
+daily on our own client work · Licensed under MIT
+
+How we think about SEO and GEO (getting AI answers to cite you) →
+**[Super Simple Marketing](https://www.youtube.com/@super-simple-marketing)**
 
 </div>
