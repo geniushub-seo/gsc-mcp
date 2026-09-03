@@ -215,13 +215,15 @@ chmod 600 ~/.config/gsc-mcp/service-account.json
 
 ## Skills（開箱即用的分析）
 
-四個 skill 隨 server 附上，不用自己想 prompt：
+六個 skill 隨 server 附上，不用自己想 prompt：
 
 | Skill | 使用者會怎麼問 | 做什麼 |
 |---|---|---|
 | `nonbrand-performance` | 「除了搜我公司名，還有誰找得到我？」 | 用 regex query filter（`excludingRegex`）切分品牌與非品牌流量，能一次涵蓋品牌詞的所有拼法變體 |
 | `monthly-report` | 「這個月網站表現如何？」 | 月報，內建品牌／非品牌切分 |
 | `index-health` | 「Google 有沒有看到我的新頁面？」 | sitemap 狀態、逐頁診斷、canonical 衝突偵測 |
+| `ctr-gaps` | 「哪些頁排名不錯卻沒人點？該改哪個標題？」 | 配 `find_ctr_gaps`。含判讀規則：基準 CTR 過低的字，改標題也不會有點擊 |
+| `traffic-decline-diagnosis` | 「流量為什麼掉了？」 | 配 `find_declining_pages`。把排名掉、需求掉、CTR 掉分開歸因 |
 | `gsc-recipes` | 其餘任何問題 | 參數路由表：問題 → 精確的 tool 呼叫 |
 
 Claude Code plugin 與 Codex 都會讀取共用的 `.agents/skills/`。Cursor 有同一套安全預設的 project rule；需要特定分析時，agent 可讀對應的 `SKILL.md`。
@@ -236,8 +238,13 @@ Claude Code plugin 與 Codex 都會讀取共用的 `.agents/skills/`。Cursor �
 | `compare_periods` | `searchanalytics.query` ×2 | — | server 端封裝，回傳兩期數據加 delta |
 | `inspect_url` | `urlInspection.index.inspect` | — | 一次 1–10 個 URL，序列呼叫 |
 | `manage_sitemaps` | `sitemaps.list/get/submit/delete` | 條件 | 四合一；submit / delete 需開旗標 |
+| `find_ctr_gaps` | `searchanalytics.query` | — | 排名不差但點擊低於同名次同儕的 query+page；預設位置 1–20、`min_impressions` 100、回 50 列（上限 1,000） |
+| `find_page_two_queries` | `searchanalytics.query` | — | 剛好排在第一頁外、但有真實曝光量的 query；預設位置 11–20、`min_impressions` 50、回 50 列（上限 1,000） |
+| `find_declining_pages` | `searchanalytics.query` ×2 | — | 兩個等長期間之間掉點擊的頁，並歸因為 `position_drop`／`impressions_drop`／`ctr_drop`／`unclear`；預設 `min_click_drop` 10 |
 
-只有六支是刻意的。總覽、逐頁拆解、「進階」分析其實是**同一個 API 呼叫的不同預設參數**，各做一支的代價是每次請求都要把所有 schema 傳給 LLM，選錯的機率也跟著上升。那些情況交給 `gsc-recipes` 這張路由表，不佔 context。**只有 LLM 自己做不到的運算才值得包成 tool**——例如對 25,000 列算中位數基準。
+只有九支是刻意的。總覽、逐頁拆解、「進階」分析其實是**同一個 API 呼叫的不同預設參數**，各做一支的代價是每次請求都要把所有 schema 傳給 LLM，選錯的機率也跟著上升。那些情況交給 `gsc-recipes` 這張路由表，不佔 context。**只有 LLM 自己做不到的運算才值得包成 tool**——後面三支就是這條線的另一邊：對最多 25,000 列算中位數基準、跨兩期逐頁歸因，那不是 LLM 讀得完的算術。
+
+那三支只回事實與算術，不給建議。判讀規則在 `ctr-gaps` 與 `traffic-decline-diagnosis` 兩支 skill 裡——沒有規則就照數字給建議，會踩雷（例如基準 CTR 本來就只有 1% 的字，改標題不會有點擊）。
 
 ### 明確不做
 

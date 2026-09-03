@@ -155,7 +155,7 @@ writing files. On failure, it prints the corrective command.
 
 ## Use
 
-### Six tools
+### Nine tools
 
 | Tool | Purpose | Key constraint |
 |---|---|---|
@@ -165,6 +165,9 @@ writing files. On failure, it prints the corrective command.
 | `compare_periods` | Compare two periods and calculate deltas | Periods must have equal length; otherwise `invalid_input`. Default `row_limit` is **100**. |
 | `inspect_url` | Inspect Google's indexed state for URLs | 1–10 URLs per call, issued serially. |
 | `manage_sitemaps` | List / get / submit / delete sitemaps | `submit` and `delete` are disabled by default. |
+| `find_ctr_gaps` | Query+page pairs that rank well but are clicked less than their position peers — the shortlist for title rewrites | Position window defaults to 1–20, `min_impressions` to **100**, `row_limit` to **50** (max 1,000). |
+| `find_page_two_queries` | Queries ranking just off page one with real impression volume — the shortlist for adding content or internal links | Position window defaults to **11–20**, `min_impressions` to **50**, `row_limit` to **50** (max 1,000). |
+| `find_declining_pages` | Pages that lost clicks between two equal-length periods, each classified as `position_drop`, `impressions_drop`, `ctr_drop` or `unclear` | Periods must have equal length. `min_click_drop` defaults to **10**, `row_limit` to **50** (max 1,000). |
 
 ### Flexible `site_url` input
 
@@ -236,14 +239,21 @@ existing ADC token, so writes also need a token issued with `webmasters`, not
 
 ### Included skills
 
-Four skills live under `.agents/skills/`:
+Six skills live under `.agents/skills/`:
 
 | Skill | Typical request |
 |---|---|
 | `nonbrand-performance` | “Who finds me without searching for my company name?” |
 | `monthly-report` | “How did the site perform this month?” |
 | `index-health` | “Has Google seen my new pages?” |
+| `ctr-gaps` | “Which pages rank but get no clicks? Which titles should I rewrite?” |
+| `traffic-decline-diagnosis` | “Why did traffic drop?” |
 | `gsc-recipes` | Any other question: routes the question to an exact tool call. |
+
+The three computed tools return arithmetic, not advice. `ctr-gaps` and
+`traffic-decline-diagnosis` carry the reading rules that keep the arithmetic
+from producing bad recommendations — read the skill before acting on those
+tools' output.
 
 ## Native agent configuration
 

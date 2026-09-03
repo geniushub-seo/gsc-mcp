@@ -215,13 +215,15 @@ chmod 600 ~/.config/gsc-mcp/service-account.json
 
 ## Skills（开箱即用的分析）
 
-四个 skill 随 server 一起提供，不用自己琢磨 prompt：
+六个 skill 随 server 一起提供，不用自己琢磨 prompt：
 
 | Skill | 用户会怎么问 | 做什么 |
 |---|---|---|
 | `nonbrand-performance` | 「除了搜我公司名，还有谁能找到我？」 | 用 regex 查询过滤器（`excludingRegex`）区分品牌与非品牌流量，能一次涵盖品牌词的所有拼写变体 |
 | `monthly-report` | 「这个月网站表现怎么样？」 | 月度报告，内置品牌／非品牌拆分 |
 | `index-health` | 「Google 有没有看到我的新页面？」 | sitemap 状态、逐页诊断、canonical 冲突检测 |
+| `ctr-gaps` | 「哪些页排名不错却没人点？该改哪个标题？」 | 配 `find_ctr_gaps`。含判读规则：基准 CTR 本来就极低的词，改标题也不会有点击 |
+| `traffic-decline-diagnosis` | 「流量为什么掉了？」 | 配 `find_declining_pages`。把排名下滑、需求下滑、CTR 下滑分开归因 |
 | `gsc-recipes` | 其他任何问题 | 参数路由表：问题 → 精确的 tool 调用 |
 
 Claude Code plugin 与 Codex 都会读取共用的 `.agents/skills/`。Cursor 有同一套安全默认值的 project rule；需要特定分析时，agent 可读取对应的 `SKILL.md`。
@@ -236,8 +238,13 @@ Claude Code plugin 与 Codex 都会读取共用的 `.agents/skills/`。Cursor �
 | `compare_periods` | `searchanalytics.query` ×2 | — | server 端封装：返回两个时间段的数据加 delta |
 | `inspect_url` | `urlInspection.index.inspect` | — | 每次 1–10 个 URL，串行调用 |
 | `manage_sitemaps` | `sitemaps.list/get/submit/delete` | 有条件 | 四合一；submit / delete 需要开启开关 |
+| `find_ctr_gaps` | `searchanalytics.query` | — | 排名不差但点击低于同名次同侪的 query+page；默认位置 1–20、`min_impressions` 100、返回 50 行（上限 1,000） |
+| `find_page_two_queries` | `searchanalytics.query` | — | 刚好排在第一页之外、但有真实曝光量的 query；默认位置 11–20、`min_impressions` 50、返回 50 行（上限 1,000） |
+| `find_declining_pages` | `searchanalytics.query` ×2 | — | 两个等长时间段之间掉点击的页面，并归因为 `position_drop`／`impressions_drop`／`ctr_drop`／`unclear`；默认 `min_click_drop` 10 |
 
-只做六个是有意为之。总览、按页面拆解、「进阶」分析其实都是**同一个 API 调用的不同默认参数**，每个都做成独立 tool 的代价是每次请求都要把所有 schema 发给 LLM，选错的概率也随之上升。那些场景交给 `gsc-recipes` 这张路由表，不占 context。**只有 LLM 自己做不到的计算才值得封装成 tool**——比如对 25,000 行求中位数基准。
+只做九个是有意为之。总览、按页面拆解、「进阶」分析其实都是**同一个 API 调用的不同默认参数**，每个都做成独立 tool 的代价是每次请求都要把所有 schema 发给 LLM，选错的概率也随之上升。那些场景交给 `gsc-recipes` 这张路由表，不占 context。**只有 LLM 自己做不到的计算才值得封装成 tool**——后面三个就是这条线的另一边：对最多 25,000 行求中位数基准、跨两期逐页归因，那不是 LLM 读得完的算术。
+
+那三个只返回事实与算术，不给建议。判读规则在 `ctr-gaps` 与 `traffic-decline-diagnosis` 两个 skill 里——没有规则就照数字给建议会踩雷（比如基准 CTR 本来就只有 1% 的词，改标题不会有点击）。
 
 ### 明确不做
 

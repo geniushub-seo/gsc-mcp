@@ -291,13 +291,15 @@ asking it to call `list_sites`.
 
 ## Skills (analyses that work out of the box)
 
-Four skills ship with the server, so you don't have to invent the prompt yourself:
+Six skills ship with the server, so you don't have to invent the prompt yourself:
 
 | Skill | What a user would ask | What it does |
 |---|---|---|
 | `nonbrand-performance` | "Who finds me *without* searching my company name?" | Splits branded from non-branded traffic using regex query filters (`excludingRegex`), which catches every spelling variant of your brand |
 | `monthly-report` | "How did the site do this month?" | A monthly report with the branded/non-branded split built in |
 | `index-health` | "Has Google seen my new pages yet?" | Sitemap status, per-URL diagnosis, and canonical-conflict detection |
+| `ctr-gaps` | "Which pages rank but get no clicks? Which titles should I rewrite?" | Pairs with `find_ctr_gaps`. Carries the reading rule that a query whose baseline CTR is already tiny will not gain clicks from a new title |
+| `traffic-decline-diagnosis` | "Why did traffic drop?" | Pairs with `find_declining_pages`. Separates ranking loss from demand loss from CTR loss |
 | `gsc-recipes` | Anything else | A parameter routing table: question → the exact tool call |
 
 Claude Code's plugin and Codex discover the shared skills in `.agents/skills/`. Cursor receives the same safe defaults from its project rule; its agent can read a `SKILL.md` when a specific analysis is requested.
@@ -312,8 +314,13 @@ Claude Code's plugin and Codex discover the shared skills in `.agents/skills/`. 
 | `compare_periods` | `searchanalytics.query` ×2 | — | Server-side wrapper: two periods plus deltas |
 | `inspect_url` | `urlInspection.index.inspect` | — | 1–10 URLs per call, issued sequentially |
 | `manage_sitemaps` | `sitemaps.list/get/submit/delete` | conditional | Four actions in one; submit/delete are flag-gated |
+| `find_ctr_gaps` | `searchanalytics.query` | — | Query+page pairs clicked less than their position peers. Position window 1–20, `min_impressions` 100, 50 rows returned (max 1,000) |
+| `find_page_two_queries` | `searchanalytics.query` | — | Queries ranking just off page one with real impression volume. Position window 11–20, `min_impressions` 50, 50 rows returned (max 1,000) |
+| `find_declining_pages` | `searchanalytics.query` ×2 | — | Pages that lost clicks between two equal-length periods, each attributed to `position_drop`, `impressions_drop`, `ctr_drop` or `unclear`. `min_click_drop` defaults to 10 |
 
-Six tools is deliberate. Overviews, by-page breakdowns and "advanced" analytics are all the *same* API call with different default parameters — shipping each as its own tool inflates the schema payload sent to the LLM on every request and raises the odds it picks the wrong one. The `gsc-recipes` routing table covers those cases instead, at zero context cost. A wrapper only earns its place when the LLM genuinely cannot do the work itself, such as computing a median baseline across 25,000 rows.
+Nine tools is deliberate. Overviews, by-page breakdowns and "advanced" analytics are all the *same* API call with different default parameters — shipping each as its own tool inflates the schema payload sent to the LLM on every request and raises the odds it picks the wrong one. The `gsc-recipes` routing table covers those cases instead, at zero context cost. A wrapper only earns its place when the LLM genuinely cannot do the work itself — which is exactly what the last three do: a median baseline across up to 25,000 rows, and per-page attribution across two periods. That is not arithmetic an LLM can read its way through.
+
+Those three return facts and arithmetic, never advice. The reading rules live in the `ctr-gaps` and `traffic-decline-diagnosis` skills. Without them, acting on the numbers alone leads to bad calls — rewriting the title of a query whose baseline CTR was never going to exceed 1%, for instance.
 
 ### Deliberately not implemented
 
