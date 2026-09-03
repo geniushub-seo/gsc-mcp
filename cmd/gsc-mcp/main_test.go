@@ -97,8 +97,8 @@ func TestNewServer_ListTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list tools: %v", err)
 	}
-	if len(result.Tools) != 6 {
-		t.Fatalf("expected 6 tools, got %d", len(result.Tools))
+	if len(result.Tools) != 9 {
+		t.Fatalf("expected 9 tools, got %d", len(result.Tools))
 	}
 
 	names := make(map[string]bool)
@@ -108,6 +108,7 @@ func TestNewServer_ListTools(t *testing.T) {
 	for _, want := range []string{
 		"list_sites", "get_site", "query_search_analytics", "inspect_url",
 		"compare_periods", "manage_sitemaps",
+		"find_ctr_gaps", "find_page_two_queries", "find_declining_pages",
 	} {
 		if !names[want] {
 			t.Errorf("expected %s tool to be registered", want)

@@ -157,3 +157,37 @@ func TestNewError_PreservesLocalMessage(t *testing.T) {
 		t.Fatalf("local message was truncated: got %d bytes, want %d", len(got.Message), len(message))
 	}
 }
+
+// TestQuotaProjectSuggestion_HasNoPlaceholder: rationale on quotaProjectSuggestion itself.
+func TestQuotaProjectSuggestion_HasNoPlaceholder(t *testing.T) {
+	t.Parallel()
+	got := MapGoogleAPIError(&googleapi.Error{
+		Code:    403,
+		Message: "The searchconsole.googleapis.com API requires a quota project, which is not set by default.",
+	}).Suggestion
+
+	if strings.Contains(got, "YOUR_PROJECT_ID") {
+		t.Errorf("suggestion still hands out a placeholder id: %q", got)
+	}
+	if !strings.Contains(got, "gcloud projects list") {
+		t.Errorf("suggestion must tell the caller where a real id comes from: %q", got)
+	}
+	if !strings.Contains(got, "set-quota-project") {
+		t.Errorf("suggestion must keep the fix command: %q", got)
+	}
+}
+
+// TestMapGoogleAPIError_401CoversADC covers the primary install path. The 401
+// suggestion used to name only a service account key, so an ADC user — the
+// documented default — was sent looking for a file that never existed.
+func TestMapGoogleAPIError_401CoversADC(t *testing.T) {
+	t.Parallel()
+	got := MapGoogleAPIError(&googleapi.Error{Code: 401, Message: "Request had invalid authentication credentials."})
+
+	if !strings.Contains(got.Suggestion, "application-default login") {
+		t.Errorf("401 suggestion must give the ADC re-login command: %q", got.Suggestion)
+	}
+	if !strings.Contains(got.Suggestion, "Service account") {
+		t.Errorf("401 suggestion must still cover service-account keys: %q", got.Suggestion)
+	}
+}

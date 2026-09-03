@@ -33,6 +33,7 @@ build-release:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o dist/gsc-mcp-linux-amd64 ./cmd/gsc-mcp
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o dist/gsc-mcp-linux-arm64 ./cmd/gsc-mcp
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o dist/gsc-mcp-windows-amd64.exe ./cmd/gsc-mcp
+	(cd .agents/skills && COPYFILE_DISABLE=1 tar -czf ../../dist/gsc-mcp-skills.tar.gz */)
 	(cd dist && shasum -a 256 gsc-mcp-* > checksums.txt)
 	@echo "VERSION=$(VERSION)"
 	@cat dist/checksums.txt

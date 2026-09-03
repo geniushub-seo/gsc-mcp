@@ -29,7 +29,7 @@ If the user cannot answer, derive a first pass from the domain (`acme.com` → `
 
 ## Step 3 — Pull both halves
 
-Same window for all calls. Default to the last 28 days ending 3 days ago (GSC data lags 2–4 days).
+Same window for all calls: the `gsc-recipes` **Defaults** window (28 days ending the day before `first_incomplete_date`, found with one `dimensions: ["date"]` call first).
 
 KPI totals (clicks, share, change) come from **aggregate** calls: **omit dimensions**. Do not sum a `dimensions: ["query"]` top-N for these numbers — `row_limit` would silently drop traffic.
 

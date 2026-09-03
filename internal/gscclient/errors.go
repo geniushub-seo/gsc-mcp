@@ -62,8 +62,13 @@ var authFailureMarkers = []string{
 	"invalid_grant",
 }
 
+// quotaProjectSuggestion deliberately spells out the lookup step instead of a
+// YOUR_PROJECT_ID placeholder: an agent handed a placeholder guesses a
+// plausible-looking project id and only finds out it was wrong on the next
+// error. `gcloud projects list` is the only source of a real id.
 const quotaProjectSuggestion = "this is not a property permission problem: the credentials have no quota project set for the Search Console API. " +
-	"Run: gcloud auth application-default set-quota-project YOUR_PROJECT_ID (that project must have the Search Console API enabled)."
+	"Two steps: (1) run `gcloud projects list` and take the projectId of a project that has the Search Console API enabled; " +
+	"(2) run `gcloud auth application-default set-quota-project <that projectId>`. Use the value from step 1 verbatim; do not guess an id from the name."
 
 const credentialsRejectedSuggestion = "the credentials were rejected before any API call, so retrying will not help. " +
 	"Service account: the key may have been deleted or disabled — generate a new one. " +
@@ -98,7 +103,7 @@ func MapGoogleAPIError(err error) Error {
 	case 400:
 		return Error{Code: ErrInvalidInput, Message: msg, Suggestion: "check the request parameters against the tool schema"}
 	case 401:
-		return Error{Code: ErrAuthFailed, Message: msg, Suggestion: "verify the service account key is valid and the Search Console API is enabled"}
+		return Error{Code: ErrAuthFailed, Message: msg, Suggestion: credentialsRejectedSuggestion}
 	case 403:
 		if matchesAny(msg, quotaProjectMarker) {
 			return Error{Code: ErrPermissionDenied, Message: msg, Suggestion: quotaProjectSuggestion}

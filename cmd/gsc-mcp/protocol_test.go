@@ -37,8 +37,8 @@ func TestProtocol_ListToolsSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Tools) != 6 {
-		t.Fatalf("tools = %d, want 6", len(result.Tools))
+	if len(result.Tools) != 9 {
+		t.Fatalf("tools = %d, want 9", len(result.Tools))
 	}
 
 	// Dump golden schemas and verify no union types remain.

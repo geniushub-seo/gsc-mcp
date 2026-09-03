@@ -1,12 +1,13 @@
 # 安裝 prompt（直接貼給 agent）
 
-給完全沒有終端機經驗的使用者。複製下方程式碼區塊的**全部**內容，貼給 Claude Code、
-Codex、Hermes 或任何能執行終端機指令的 AI agent，它會從頭把 gsc-mcp 裝到可以查
-GSC 資料為止。你只需要在它打開的 Google 頁面選帳號、勾同意。
+給完全沒經驗的使用者用。複製下方程式碼區塊的全部內容，貼給 Claude Code、Codex、
+Hermes 或任何能執行終端機指令的 agent。
 
-這份 prompt 涵蓋三個真實安裝踩過的坑：macOS 沒有 homebrew 且帳號不是管理員、
-gcloud 需要 Python 3.10+ 而 macOS 內建的是 3.9.6、以及登入帳號在 Search Console
-沒有任何網站權限時 doctor 仍會印出 OK。
+三個修正來源（2026-08-20，hermes session `20260820_121815_5ccfef` 實測）：
+
+- macOS 沒有 homebrew 時**不要嘗試安裝 homebrew**，它要求本機管理員權限
+- gcloud 需要 Python 3.10+，macOS 內建 3.9.6 不夠，`install.sh` 自己也跑不起來
+- `doctor` 印 `list_sites OK` 但 property 數為 0 = 帳號選錯，不是安裝成功
 
 ```text
 幫我安裝 gsc-mcp（Google Search Console 的本地 MCP server），裝到我能查 GSC 資料為止。

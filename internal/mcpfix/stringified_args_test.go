@@ -19,6 +19,21 @@ func TestToolArrayFields_ComparePeriodsIncludesFilterGroups(t *testing.T) {
 	}
 }
 
+func TestToolArrayFields_CoversEveryToolTakingFilterGroups(t *testing.T) {
+	t.Parallel()
+	// A tool that accepts dimension_filter_groups but is absent from this map
+	// rejects any client that stringifies the array, and the failure surfaces as
+	// a schema error the handler never sees.
+	for _, tool := range []string{
+		"query_search_analytics", "compare_periods",
+		"find_ctr_gaps", "find_page_two_queries", "find_declining_pages",
+	} {
+		if !slices.Contains(toolArrayFields[tool], "dimension_filter_groups") {
+			t.Errorf("%s middleware field map missing dimension_filter_groups; got %v", tool, toolArrayFields[tool])
+		}
+	}
+}
+
 func TestCoerceStringifiedArray(t *testing.T) {
 	cases := []struct {
 		name string

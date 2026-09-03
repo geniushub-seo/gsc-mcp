@@ -101,6 +101,281 @@
       ],
       "type": "object"
     },
+    "find_ctr_gaps": {
+      "additionalProperties": false,
+      "properties": {
+        "data_state": {
+          "description": "Optional data freshness: all (default, matches the GSC console) or final.",
+          "type": "string"
+        },
+        "dimension_filter_groups": {
+          "description": "Optional dimension filters. Use operator excludingRegex on dimension query to get non-brand CTR gaps.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "filters": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "dimension": {
+                      "description": "Dimension to filter on: query, page, country, device, or searchAppearance.",
+                      "type": "string"
+                    },
+                    "expression": {
+                      "description": "The value or regex to filter by.",
+                      "type": "string"
+                    },
+                    "operator": {
+                      "description": "Filter operator: equals, notEquals, contains, notContains, includingRegex, excludingRegex.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "dimension",
+                    "operator",
+                    "expression"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "groupType": {
+                "description": "Filter logic within the group. Only 'and' is supported by the GSC API.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "end_date": {
+          "description": "End date (YYYY-MM-DD, PT).",
+          "type": "string"
+        },
+        "min_impressions": {
+          "description": "Optional minimum impressions for a row to be reported and to enter the baseline pool. Default 100.",
+          "type": "integer"
+        },
+        "min_samples": {
+          "description": "Optional minimum number of OTHER neighbouring rows the median CTR baseline needs before the position window stops widening. Default 10.",
+          "type": "integer"
+        },
+        "position_max": {
+          "description": "Optional highest average position to consider. Default 20.",
+          "type": "number"
+        },
+        "position_min": {
+          "description": "Optional lowest average position to consider. Default 1.",
+          "type": "number"
+        },
+        "row_limit": {
+          "description": "Optional maximum ranked rows to return. Default 50, maximum 1000.",
+          "type": "integer"
+        },
+        "search_type": {
+          "description": "Optional search type: web, image, video, news, discover, or googleNews. Omit to let Google default to web.",
+          "type": "string"
+        },
+        "site_url": {
+          "description": "The GSC property to query. Accepts bare domain, full URL, or sc-domain: form.",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "Start date (YYYY-MM-DD, PT).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "site_url",
+        "start_date",
+        "end_date"
+      ],
+      "type": "object"
+    },
+    "find_declining_pages": {
+      "additionalProperties": false,
+      "properties": {
+        "data_state": {
+          "description": "Optional data freshness: all (default, matches the GSC console) or final.",
+          "type": "string"
+        },
+        "dimension_filter_groups": {
+          "description": "Optional dimension filters applied to both periods. Use operator excludingRegex on dimension query for non-brand declines.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "filters": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "dimension": {
+                      "description": "Dimension to filter on: query, page, country, device, or searchAppearance.",
+                      "type": "string"
+                    },
+                    "expression": {
+                      "description": "The value or regex to filter by.",
+                      "type": "string"
+                    },
+                    "operator": {
+                      "description": "Filter operator: equals, notEquals, contains, notContains, includingRegex, excludingRegex.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "dimension",
+                    "operator",
+                    "expression"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "groupType": {
+                "description": "Filter logic within the group. Only 'and' is supported by the GSC API.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "impressions_drop_pct_threshold": {
+          "description": "Optional impressions change percent (negative) below which a decline is attributed to lost impressions. Default -10.",
+          "type": "number"
+        },
+        "min_click_drop": {
+          "description": "Optional minimum click loss (positive number) for a page to be reported. Default 10.",
+          "type": "integer"
+        },
+        "period_a_end": {
+          "description": "End date of period A — baseline/earlier period (YYYY-MM-DD, PT).",
+          "type": "string"
+        },
+        "period_a_start": {
+          "description": "Start date of period A — baseline/earlier period (YYYY-MM-DD, PT). All deltas are B minus A.",
+          "type": "string"
+        },
+        "period_b_end": {
+          "description": "End date of period B — current/later period (YYYY-MM-DD, PT). Trimmed automatically when it reaches into Google's incomplete window.",
+          "type": "string"
+        },
+        "period_b_start": {
+          "description": "Start date of period B — current/later period (YYYY-MM-DD, PT). All deltas are B minus A.",
+          "type": "string"
+        },
+        "position_drop_threshold": {
+          "description": "Optional average-position worsening that counts as a ranking loss. Default 1.",
+          "type": "number"
+        },
+        "row_limit": {
+          "description": "Optional maximum ranked rows to return. Default 50, maximum 1000.",
+          "type": "integer"
+        },
+        "search_type": {
+          "description": "Optional search type: web, image, video, news, discover, or googleNews. Omit to let Google default to web.",
+          "type": "string"
+        },
+        "site_url": {
+          "description": "The GSC property to query. Accepts bare domain, full URL, or sc-domain: form.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "site_url",
+        "period_a_start",
+        "period_a_end",
+        "period_b_start",
+        "period_b_end"
+      ],
+      "type": "object"
+    },
+    "find_page_two_queries": {
+      "additionalProperties": false,
+      "properties": {
+        "data_state": {
+          "description": "Optional data freshness: all (default, matches the GSC console) or final.",
+          "type": "string"
+        },
+        "dimension_filter_groups": {
+          "description": "Optional dimension filters. Use operator excludingRegex on dimension query to exclude brand terms.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "filters": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "dimension": {
+                      "description": "Dimension to filter on: query, page, country, device, or searchAppearance.",
+                      "type": "string"
+                    },
+                    "expression": {
+                      "description": "The value or regex to filter by.",
+                      "type": "string"
+                    },
+                    "operator": {
+                      "description": "Filter operator: equals, notEquals, contains, notContains, includingRegex, excludingRegex.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "dimension",
+                    "operator",
+                    "expression"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "groupType": {
+                "description": "Filter logic within the group. Only 'and' is supported by the GSC API.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "end_date": {
+          "description": "End date (YYYY-MM-DD, PT).",
+          "type": "string"
+        },
+        "min_impressions": {
+          "description": "Optional minimum impressions a query needs to be reported. Default 50.",
+          "type": "integer"
+        },
+        "position_max": {
+          "description": "Optional highest average position to consider. Default 20.",
+          "type": "number"
+        },
+        "position_min": {
+          "description": "Optional lowest average position to consider. Default 11.",
+          "type": "number"
+        },
+        "row_limit": {
+          "description": "Optional maximum ranked rows to return. Default 50, maximum 1000.",
+          "type": "integer"
+        },
+        "search_type": {
+          "description": "Optional search type: web, image, video, news, discover, or googleNews. Omit to let Google default to web.",
+          "type": "string"
+        },
+        "site_url": {
+          "description": "The GSC property to query. Accepts bare domain, full URL, or sc-domain: form.",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "Start date (YYYY-MM-DD, PT).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "site_url",
+        "start_date",
+        "end_date"
+      ],
+      "type": "object"
+    },
     "get_site": {
       "additionalProperties": false,
       "properties": {

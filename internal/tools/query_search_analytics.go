@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
 	"google.golang.org/api/searchconsole/v1"
 )
 
@@ -41,6 +41,14 @@ type querySearchAnalyticsOutput struct {
 	// Note is a soft advisory (future dates, possible retention, dropped path),
 	// not an error.
 	Note string `json:"note,omitempty"`
+	// FirstIncompleteDate / FirstIncompleteHour come straight from Google's
+	// response metadata: the first date (or hour) whose numbers are still being
+	// collected, so nothing downstream has to guess at a fixed data lag. Google
+	// only populates them when the request grouped by date with data_state=all
+	// (or by hour with hourly_all) and the range actually reaches into
+	// incomplete data; empty otherwise.
+	FirstIncompleteDate string `json:"first_incomplete_date,omitempty"`
+	FirstIncompleteHour string `json:"first_incomplete_hour,omitempty"`
 	// Ordering names the key and direction the rows are actually sorted by, so a
 	// caller can never mistake GSC's native clicks-desc order for what it asked.
 	Ordering string `json:"ordering"`
@@ -197,6 +205,7 @@ func querySearchAnalytics(ctx context.Context, client *gscclient.Client, input q
 	}
 
 	rows, examined, truncated, scanCapped := applyAnalyticsWindow(toAnalyticsRows(resp.Rows), normalized, nativeOrder)
+	incompleteDate, incompleteHour := firstIncomplete(resp)
 
 	out := querySearchAnalyticsOutput{
 		QueriedAt:       nowRFC3339(),
@@ -211,12 +220,14 @@ func querySearchAnalytics(ctx context.Context, client *gscclient.Client, input q
 			gscclient.DroppedPathNote(input.SiteURL),
 			dateRangeNotes(normalized.StartDate, normalized.EndDate),
 		),
-		Ordering:     orderingLabel(normalized.SortBy, normalized.SortOrder),
-		RowsExamined: examined,
-		Truncated:    truncated,
-		ScanCapped:   scanCapped,
-		RowCount:     len(rows),
-		Rows:         rows,
+		FirstIncompleteDate: incompleteDate,
+		FirstIncompleteHour: incompleteHour,
+		Ordering:            orderingLabel(normalized.SortBy, normalized.SortOrder),
+		RowsExamined:        examined,
+		Truncated:           truncated,
+		ScanCapped:          scanCapped,
+		RowCount:            len(rows),
+		Rows:                rows,
 	}
 	return toolResult(out), nil, nil
 }

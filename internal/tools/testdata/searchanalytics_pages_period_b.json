@@ -1,0 +1,9 @@
+{
+  "responseAggregationType": "byPage",
+  "rows": [
+    {"keys": ["https://example.com/alpha/"], "clicks": 300, "impressions": 9800, "ctr": 0.030612244897959183, "position": 9.5},
+    {"keys": ["https://example.com/beta/"], "clicks": 150, "impressions": 3000, "ctr": 0.05, "position": 8.2},
+    {"keys": ["https://example.com/gamma/"], "clicks": 120, "impressions": 3900, "ctr": 0.03076923076923077, "position": 6.1},
+    {"keys": ["https://example.com/epsilon/"], "clicks": 3, "impressions": 90, "ctr": 0.03333333333333333, "position": 9.1}
+  ]
+}

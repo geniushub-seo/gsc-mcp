@@ -47,6 +47,11 @@ jobs:
               -o "$out" \
               ./cmd/gsc-mcp
           done
+          # Skill bundle: install.sh / install.ps1 unpack this into the agent's
+          # skills directory. Tarball entries are the skill directory names, so
+          # `tar -xzf` into ~/.claude/skills lands them at the right depth. Built
+          # before the checksum line so the gsc-mcp-* glob covers it too.
+          (cd .agents/skills && COPYFILE_DISABLE=1 tar -czf ../../dist/gsc-mcp-skills.tar.gz */)
           (cd dist && shasum -a 256 gsc-mcp-* > checksums.txt)
           cat dist/checksums.txt
           ls -la dist/

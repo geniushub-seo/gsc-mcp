@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
 	"google.golang.org/api/searchconsole/v1"
 )
 
@@ -45,6 +45,17 @@ type comparePeriodsOutput struct {
 	DataState    string   `json:"data_state,omitempty"`
 	// Note is a soft advisory (dropped path), not an error.
 	Note string `json:"note,omitempty"`
+	// The period_*_first_incomplete_* fields come straight from each period's
+	// response metadata: the first date (or hour) whose numbers Google is still
+	// collecting. A value on period B means the current period's tail is not
+	// final yet, which is the usual reason a comparison shows a decline that
+	// disappears a few days later. Google only populates them when the request
+	// grouped by date with data_state=all (or by hour with hourly_all) and the
+	// range reaches into incomplete data.
+	PeriodAFirstIncompleteDate string `json:"period_a_first_incomplete_date,omitempty"`
+	PeriodAFirstIncompleteHour string `json:"period_a_first_incomplete_hour,omitempty"`
+	PeriodBFirstIncompleteDate string `json:"period_b_first_incomplete_date,omitempty"`
+	PeriodBFirstIncompleteHour string `json:"period_b_first_incomplete_hour,omitempty"`
 	// Ordering names the key and direction the joined rows are sorted by.
 	Ordering string `json:"ordering"`
 	// RowsExamined is the size of the joined set before truncation to row_limit.
@@ -198,6 +209,7 @@ func comparePeriods(ctx context.Context, client *gscclient.Client, input compare
 
 	var resolvedSiteURL string
 	var rowsA, rowsB []*searchconsole.ApiDataRow
+	var incompleteDateA, incompleteHourA, incompleteDateB, incompleteHourB string
 
 	_, err := gscclient.WithResolvedSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (struct{}, error) {
 		resolvedSiteURL = resolved
@@ -212,6 +224,7 @@ func comparePeriods(ctx context.Context, client *gscclient.Client, input compare
 			return struct{}{}, err
 		}
 		rowsA = respA.Rows
+		incompleteDateA, incompleteHourA = firstIncomplete(respA)
 
 		reqB := buildCompareQueryRequest(normalized, normalized.PeriodBStart, normalized.PeriodBEnd)
 		respB, err := client.QuerySearchAnalytics(ctx, resolved, reqB)
@@ -219,6 +232,7 @@ func comparePeriods(ctx context.Context, client *gscclient.Client, input compare
 			return struct{}{}, err
 		}
 		rowsB = respB.Rows
+		incompleteDateB, incompleteHourB = firstIncomplete(respB)
 		return struct{}{}, nil
 	})
 	if err != nil {
@@ -238,24 +252,28 @@ func comparePeriods(ctx context.Context, client *gscclient.Client, input compare
 	periodADays, _ := inclusiveDays(normalized.PeriodAStart, normalized.PeriodAEnd)
 	periodBDays, _ := inclusiveDays(normalized.PeriodBStart, normalized.PeriodBEnd)
 	out := comparePeriodsOutput{
-		QueriedAt:    nowRFC3339(),
-		SiteURL:      resolvedSiteURL,
-		PeriodAStart: normalized.PeriodAStart,
-		PeriodAEnd:   normalized.PeriodAEnd,
-		PeriodBStart: normalized.PeriodBStart,
-		PeriodBEnd:   normalized.PeriodBEnd,
-		PeriodADays:  periodADays,
-		PeriodBDays:  periodBDays,
-		Dimensions:   normalized.Dimensions,
-		SearchType:   normalized.SearchType,
-		DataState:    normalized.DataState,
-		Note:         gscclient.DroppedPathNote(input.SiteURL),
-		Ordering:     orderingLabel(normalized.SortBy, normalized.SortOrder),
-		RowsExamined: examined,
-		Truncated:    truncated,
-		ScanCapped:   scanCapped,
-		RowCount:     len(compared),
-		Rows:         compared,
+		QueriedAt:                  nowRFC3339(),
+		SiteURL:                    resolvedSiteURL,
+		PeriodAStart:               normalized.PeriodAStart,
+		PeriodAEnd:                 normalized.PeriodAEnd,
+		PeriodBStart:               normalized.PeriodBStart,
+		PeriodBEnd:                 normalized.PeriodBEnd,
+		PeriodADays:                periodADays,
+		PeriodBDays:                periodBDays,
+		Dimensions:                 normalized.Dimensions,
+		SearchType:                 normalized.SearchType,
+		DataState:                  normalized.DataState,
+		Note:                       gscclient.DroppedPathNote(input.SiteURL),
+		PeriodAFirstIncompleteDate: incompleteDateA,
+		PeriodAFirstIncompleteHour: incompleteHourA,
+		PeriodBFirstIncompleteDate: incompleteDateB,
+		PeriodBFirstIncompleteHour: incompleteHourB,
+		Ordering:                   orderingLabel(normalized.SortBy, normalized.SortOrder),
+		RowsExamined:               examined,
+		Truncated:                  truncated,
+		ScanCapped:                 scanCapped,
+		RowCount:                   len(compared),
+		Rows:                       compared,
 	}
 	return toolResult(out), nil, nil
 }

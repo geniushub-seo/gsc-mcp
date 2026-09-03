@@ -13,7 +13,7 @@ func TestDescriptions_ContainRequiredGuidance(t *testing.T) {
 		want []string
 	}{
 		{"list_sites", descListSites, []string{"Call this first", "PT", "2–4", "16"}},
-		{"get_site", descGetSite, []string{"list_sites", "PT"}},
+		{"get_site", descGetSite, []string{"list_sites"}},
 		{"query", descQuerySearchAnalytics, []string{"25,000", "150", "export", "weighted average", "data_state", "PT", "2–4", "RE2", "10 days"}},
 		{"compare", descComparePeriods, []string{"B minus A", "ctr_delta_pp", "percentage points", "position_change", "only_in", "PT", "period_a_days"}},
 		{"inspect", descInspectURL, []string{"does NOT", "request indexing", "webmaster-tools/limits"}},

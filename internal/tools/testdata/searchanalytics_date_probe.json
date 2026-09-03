@@ -1,0 +1,12 @@
+{
+  "responseAggregationType": "byProperty",
+  "metadata": {
+    "firstIncompleteDate": "2026-08-17"
+  },
+  "rows": [
+    {"keys": ["2026-08-15"], "clicks": 120, "impressions": 4000, "ctr": 0.03, "position": 8.1},
+    {"keys": ["2026-08-16"], "clicks": 118, "impressions": 3900, "ctr": 0.0303, "position": 8.2},
+    {"keys": ["2026-08-17"], "clicks": 40, "impressions": 1300, "ctr": 0.0308, "position": 8.3},
+    {"keys": ["2026-08-18"], "clicks": 9, "impressions": 300, "ctr": 0.03, "position": 8.4}
+  ]
+}

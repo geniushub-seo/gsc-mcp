@@ -20,6 +20,9 @@ var explicitSchemas = []struct {
 	{"query_search_analytics", querySearchAnalyticsInputSchema, querySearchAnalyticsInput{}},
 	{"compare_periods", comparePeriodsInputSchema, comparePeriodsInput{}},
 	{"inspect_url", inspectURLInputSchema, inspectURLInput{}},
+	{"find_ctr_gaps", findCTRGapsInputSchema, findCTRGapsInput{}},
+	{"find_page_two_queries", findPageTwoQueriesInputSchema, findPageTwoQueriesInput{}},
+	{"find_declining_pages", findDecliningPagesInputSchema, findDecliningPagesInput{}},
 }
 
 func TestExplicitSchemas_MatchStructFields(t *testing.T) {

@@ -6,6 +6,9 @@
 #   curl -fsSL ... | bash -s -- --dry-run
 #   DRY_RUN=1 ./install.sh
 #
+# Also unpacks the bundled skills into ~/.claude/skills when that directory's
+# parent already exists. --no-skills opts out, --with-skills forces it.
+#
 # Does NOT: run gcloud login, merge MCP config, or edit shell rc files.
 # After install, an assisting agent must run the printed follow-up commands.
 
@@ -13,6 +16,10 @@ set -euo pipefail
 
 REPO="${GSC_MCP_REPO:-geniushub-seo/gsc-mcp}"
 INSTALL_DIR="${GSC_MCP_INSTALL_DIR:-${HOME}/.local/bin}"
+SKILLS_DIR="${GSC_MCP_SKILLS_DIR:-${HOME}/.claude/skills}"
+# auto: install only when SKILLS_DIR's parent exists, so we never create a
+# Claude Code tree for someone who does not use Claude Code.
+SKILLS="${GSC_MCP_SKILLS:-auto}"
 DRY_RUN="${DRY_RUN:-0}"
 
 log() { printf '%s\n' "$*" >&2; }
@@ -21,17 +28,24 @@ die() { log "error: $*"; exit 1; }
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
+    --no-skills) SKILLS=never ;;
+    --with-skills) SKILLS=always ;;
     -h|--help)
       cat <<'EOF' >&2
 install.sh — install gsc-mcp from GitHub Releases
 
 Options:
-  --dry-run   Print actions without downloading or writing files
-  -h, --help  Show this help
+  --dry-run      Print actions without downloading or writing files
+  --no-skills    Do not install the bundled skills
+  --with-skills  Install the bundled skills even if ~/.claude does not exist
+  -h, --help     Show this help
 
 Environment:
   GSC_MCP_REPO         GitHub owner/name (default: geniushub-seo/gsc-mcp)
   GSC_MCP_INSTALL_DIR  Install directory (default: ~/.local/bin)
+  GSC_MCP_SKILLS_DIR   Skills directory (default: ~/.claude/skills)
+  GSC_MCP_SKILLS       auto (default) | always | never
+  GSC_MCP_BASE_URL     Release asset base URL (default: GitHub latest release)
   DRY_RUN=1            Same as --dry-run
 EOF
       exit 0
@@ -56,14 +70,38 @@ esac
 ext=""
 if [ "$os" = "windows" ]; then ext=".exe"; fi
 asset="gsc-mcp-${os}-${arch}${ext}"
-base_url="https://github.com/${REPO}/releases/latest/download"
+skills_asset="gsc-mcp-skills.tar.gz"
+base_url="${GSC_MCP_BASE_URL:-https://github.com/${REPO}/releases/latest/download}"
 bin_url="${base_url}/${asset}"
 sum_url="${base_url}/checksums.txt"
+skills_url="${base_url}/${skills_asset}"
+
+case "$SKILLS" in
+  always) do_skills=1; skills_why="forced by --with-skills" ;;
+  never)  do_skills=0; skills_why="disabled by --no-skills" ;;
+  auto)
+    if [ -d "$(dirname "$SKILLS_DIR")" ]; then
+      do_skills=1; skills_why="$(dirname "$SKILLS_DIR") exists"
+    else
+      do_skills=0; skills_why="$(dirname "$SKILLS_DIR") does not exist"
+    fi
+    ;;
+  *) die "invalid GSC_MCP_SKILLS='${SKILLS}' (want auto, always or never)" ;;
+esac
+
+# Printed in the closing Next steps block. Both branches below overwrite it;
+# this value only survives if nothing at all runs.
+skills_note="skills: skipped (${skills_why})"
 
 log "gsc-mcp installer"
 log "  repo:    ${REPO}"
 log "  asset:   ${asset}"
 log "  install: ${INSTALL_DIR}/gsc-mcp${ext}"
+if [ "$do_skills" = "1" ]; then
+  log "  skills:  ${SKILLS_DIR} (${skills_why})"
+else
+  log "  skills:  skipped (${skills_why})"
+fi
 if [ "$DRY_RUN" = "1" ]; then
   log "  mode:    dry-run (no download, no write)"
 fi
@@ -72,6 +110,57 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/gsc-mcp-install.XXXXXX")"
 cleanup() { rm -rf "$tmp"; }
 trap cleanup EXIT
 
+# Skills are a bonus, not the product: a release without the asset must still
+# leave a working binary behind, so a missing asset warns and returns 0. A
+# checksum mismatch is different — that is tampering, and it stops the script.
+install_skills() {
+  log "downloading ${skills_asset}..."
+  if ! curl -fsSL "$skills_url" -o "${tmp}/${skills_asset}" 2>/dev/null; then
+    log "note: this release has no ${skills_asset}; skills not installed."
+    log "      The binary works without them. Copy .agents/skills/* from the"
+    log "      repo into ${SKILLS_DIR} by hand if you want them."
+    skills_note="skills: not installed (release has no ${skills_asset})"
+    return 0
+  fi
+
+  local expected actual
+  expected="$(grep -E "[[:space:]]${skills_asset}\$" "${tmp}/checksums.txt" | awk '{print $1}')" || true
+  if [ -z "${expected:-}" ]; then
+    log "note: no checksum entry for ${skills_asset}; skills not installed."
+    skills_note="skills: not installed (no checksum entry)"
+    return 0
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    actual="$(shasum -a 256 "${tmp}/${skills_asset}" | awk '{print $1}')"
+  else
+    actual="$(sha256sum "${tmp}/${skills_asset}" | awk '{print $1}')"
+  fi
+  [ "$expected" = "$actual" ] || die "checksum mismatch for ${skills_asset} (expected ${expected}, got ${actual})"
+  log "checksum OK"
+
+  local stage="${tmp}/skills"
+  mkdir -p "$stage"
+  tar -xzf "${tmp}/${skills_asset}" -C "$stage" || die "could not unpack ${skills_asset}"
+
+  mkdir -p "$SKILLS_DIR"
+  local added=0 kept=0 name path
+  for path in "$stage"/*/; do
+    [ -d "$path" ] || continue
+    name="$(basename "$path")"
+    if [ -e "${SKILLS_DIR}/${name}" ]; then
+      # Never clobber: a local edit to a skill is worth more than our copy.
+      log "  keep ${name} (already in ${SKILLS_DIR}, left untouched)"
+      kept=$((kept + 1))
+      continue
+    fi
+    cp -R "$path" "${SKILLS_DIR}/${name}"
+    log "  add  ${name}"
+    added=$((added + 1))
+  done
+  log "skills: ${added} added, ${kept} already present -> ${SKILLS_DIR}"
+  skills_note="skills: ${added} added, ${kept} already present in ${SKILLS_DIR}"
+}
+
 if [ "$DRY_RUN" = "1" ]; then
   log "would download: ${bin_url}"
   log "would download: ${sum_url}"
@@ -79,6 +168,14 @@ if [ "$DRY_RUN" = "1" ]; then
   log "would install to ${INSTALL_DIR}/gsc-mcp${ext}"
   if [ "$os" = "darwin" ]; then
     log "would run: xattr -d com.apple.quarantine ${INSTALL_DIR}/gsc-mcp${ext}"
+  fi
+  if [ "$do_skills" = "1" ]; then
+    log "would download: ${skills_url}"
+    log "would verify sha256 of ${skills_asset}"
+    log "would unpack skills into ${SKILLS_DIR} (existing skill dirs left untouched)"
+    skills_note="skills: dry-run, nothing written (would unpack into ${SKILLS_DIR})"
+  else
+    log "would skip skills (${skills_why})"
   fi
 else
   log "downloading ${asset}..."
@@ -126,9 +223,19 @@ else
     log "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc   # or ~/.bashrc"
     log "  then open a new terminal"
   fi
+
+  if [ "$do_skills" = "1" ]; then
+    install_skills
+  else
+    log "skills: skipped (${skills_why})"
+    log "  Copy .agents/skills/* from the repo into a directory your agent reads,"
+    log "  or re-run with --with-skills to unpack them into ${SKILLS_DIR}."
+  fi
 fi
 
 cat <<EOF >&2
+
+${skills_note}
 
 Next steps (this installer does not run them):
 

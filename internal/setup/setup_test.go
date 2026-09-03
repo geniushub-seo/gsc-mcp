@@ -614,3 +614,44 @@ func TestMergeMCPConfig_DryRunDoesNotEchoOtherServers(t *testing.T) {
 		t.Errorf("dry-run should still show the entry it would add; got:\n%s", out)
 	}
 }
+
+// TestCheckPropertyCount_ZeroIsAFailure guards the FACTS.md verdict: OK only when count > 0.
+func TestCheckPropertyCount_ZeroIsAFailure(t *testing.T) {
+	t.Parallel()
+	var lines []string
+	logf := func(format string, args ...any) {
+		lines = append(lines, fmt.Sprintf(format, args...))
+	}
+
+	err := checkPropertyCount(0, logf)
+	if !errors.Is(err, errNoProperties) {
+		t.Fatalf("zero properties must fail with errNoProperties, got %v", err)
+	}
+	if out := strings.Join(lines, "\n"); strings.Contains(out, "OK") {
+		t.Errorf("zero properties must not print an OK line; got:\n%s", out)
+	}
+}
+
+// TestExplainVerifyFailure_NoPropertiesPointsAtTheAccount checks the diagnosis
+// text, because "0 properties" is the one failure whose fix is neither the
+// quota project nor the API: it is logging in as a different Google account.
+func TestExplainVerifyFailure_NoPropertiesPointsAtTheAccount(t *testing.T) {
+	t.Parallel()
+	var lines []string
+	logf := func(format string, args ...any) {
+		lines = append(lines, strings.ToLower(fmt.Sprintf(format, args...)))
+	}
+
+	explainVerifyFailure(errNoProperties, "", logf)
+
+	out := strings.Join(lines, "\n")
+	if !strings.Contains(out, "different google account") {
+		t.Errorf("must name the wrong-account cause; got:\n%s", out)
+	}
+	if !strings.Contains(out, "application-default login") {
+		t.Errorf("must give the re-login command; got:\n%s", out)
+	}
+	if strings.Contains(out, "may still be fine") {
+		t.Errorf("must not fall through to the generic default branch; got:\n%s", out)
+	}
+}

@@ -17,6 +17,12 @@ var toolArrayFields = map[string][]string{
 	"query_search_analytics": {"dimensions", "dimension_filter_groups"},
 	"compare_periods":        {"dimensions", "dimension_filter_groups"},
 	"inspect_url":            {"urls"},
+	// The computed tools take dimension_filter_groups too. Leaving them out here
+	// does not degrade gracefully: a client that stringifies the array gets a
+	// schema validation error instead of an answer.
+	"find_ctr_gaps":         {"dimension_filter_groups"},
+	"find_page_two_queries": {"dimension_filter_groups"},
+	"find_declining_pages":  {"dimension_filter_groups"},
 }
 
 // CoerceStringifiedArrayArgs returns a receiving middleware that repairs a

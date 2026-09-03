@@ -1,0 +1,18 @@
+{
+  "responseAggregationType": "byPage",
+  "rows": [
+    {"keys": ["blue widgets", "https://example.com/blue-widgets/"], "clicks": 10, "impressions": 5000, "ctr": 0.002, "position": 11.4},
+    {"keys": ["blue widgets", "https://example.com/widgets/"], "clicks": 16, "impressions": 800, "ctr": 0.02, "position": 12.2},
+    {"keys": ["red widgets", "https://example.com/red-widgets/"], "clicks": 21, "impressions": 1000, "ctr": 0.021, "position": 11.1},
+    {"keys": ["green widgets", "https://example.com/green-widgets/"], "clicks": 17, "impressions": 900, "ctr": 0.0189, "position": 11.8},
+    {"keys": ["widget guide", "https://example.com/guide/"], "clicks": 15, "impressions": 700, "ctr": 0.0214, "position": 10.9},
+    {"keys": ["widget sizes", "https://example.com/sizes/"], "clicks": 11, "impressions": 600, "ctr": 0.0183, "position": 12.4},
+    {"keys": ["widget prices", "https://example.com/prices/"], "clicks": 10, "impressions": 500, "ctr": 0.02, "position": 12.0},
+    {"keys": ["widget reviews", "https://example.com/reviews/"], "clicks": 8, "impressions": 450, "ctr": 0.0178, "position": 12.7},
+    {"keys": ["cheap widgets", "https://example.com/cheap/"], "clicks": 6, "impressions": 400, "ctr": 0.015, "position": 13.2},
+    {"keys": ["widget deals", "https://example.com/deals/"], "clicks": 6, "impressions": 350, "ctr": 0.0171, "position": 13.4},
+    {"keys": ["best widgets", "https://example.com/best/"], "clicks": 24, "impressions": 300, "ctr": 0.08, "position": 4.8},
+    {"keys": ["widget shop", "https://example.com/shop/"], "clicks": 22, "impressions": 250, "ctr": 0.088, "position": 5.1},
+    {"keys": ["tiny query", "https://example.com/tiny/"], "clicks": 0, "impressions": 20, "ctr": 0.0, "position": 11.5}
+  ]
+}

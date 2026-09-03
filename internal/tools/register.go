@@ -22,5 +22,8 @@ func Register(srv *mcp.Server, client *gscclient.Client, flags WriteFlags) {
 	registerQuerySearchAnalytics(srv, client)
 	registerInspectURL(srv, client, quota)
 	registerComparePeriods(srv, client)
+	registerFindCTRGaps(srv, client)
+	registerFindPageTwoQueries(srv, client)
+	registerFindDecliningPages(srv, client)
 	registerManageSitemaps(srv, client, flags)
 }

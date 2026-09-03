@@ -9,6 +9,9 @@
 #   # or set env vars before piping:
 #   $env:DRY_RUN = '1'; irm https://.../install.ps1 | iex
 #
+# Also unpacks the bundled skills into %USERPROFILE%\.claude\skills when that
+# directory's parent already exists. -NoSkills opts out, -WithSkills forces it.
+#
 # Does NOT: run gcloud login, merge MCP config, or edit PATH.
 # After install, an assisting agent must run the printed follow-up commands.
 #
@@ -21,8 +24,11 @@
 param(
     [switch]$DryRun,
     [switch]$Help,
+    [switch]$NoSkills,
+    [switch]$WithSkills,
     [string]$Repo,
     [string]$InstallDir,
+    [string]$SkillsDir,
     [ValidateSet('', 'amd64', 'arm64')]
     [string]$Arch = ''
 )
@@ -40,14 +46,20 @@ install.ps1 — install gsc-mcp from GitHub Releases
 
 Options:
   -DryRun       Print actions without downloading or writing files
+  -NoSkills     Do not install the bundled skills
+  -WithSkills   Install the bundled skills even if ~\.claude does not exist
   -Repo         GitHub owner/name (default: geniushub-seo/gsc-mcp)
   -InstallDir   Install directory (default: %LOCALAPPDATA%\Programs\gsc-mcp)
+  -SkillsDir    Skills directory (default: %USERPROFILE%\.claude\skills)
   -Arch         Force amd64 or arm64 (default: detect)
   -Help         Show this help
 
 Environment (useful when piping to iex, which cannot pass parameters):
   GSC_MCP_REPO         Same as -Repo
   GSC_MCP_INSTALL_DIR  Same as -InstallDir
+  GSC_MCP_SKILLS_DIR   Same as -SkillsDir
+  GSC_MCP_SKILLS       auto (default) | always | never
+  GSC_MCP_BASE_URL     Release asset base URL (default: GitHub latest release)
   GSC_MCP_ARCH         Same as -Arch
   DRY_RUN=1            Same as -DryRun
 '@
@@ -65,8 +77,21 @@ if (-not $InstallDir) {
         [System.IO.Path]::Combine($env:LOCALAPPDATA, 'Programs', 'gsc-mcp')
     }
 }
+if (-not $SkillsDir) {
+    $SkillsDir = if ($env:GSC_MCP_SKILLS_DIR) {
+        $env:GSC_MCP_SKILLS_DIR
+    } else {
+        # GetFolderPath, not $env:USERPROFILE: the env var is unset on non-Windows
+        # hosts, which is where -DryRun gets exercised.
+        [System.IO.Path]::Combine([Environment]::GetFolderPath('UserProfile'), '.claude', 'skills')
+    }
+}
 if (-not $Arch -and $env:GSC_MCP_ARCH) { $Arch = $env:GSC_MCP_ARCH }
 if (-not $DryRun -and $env:DRY_RUN -eq '1') { $DryRun = $true }
+
+# Kept on one line: a multi-line `$x = if (...) ... elseif (...)` is easy to
+# break, and this file cannot be parse-checked on the maintainer's machine.
+$skillsMode = if ($WithSkills) { 'always' } elseif ($NoSkills) { 'never' } elseif ($env:GSC_MCP_SKILLS) { $env:GSC_MCP_SKILLS } else { 'auto' }
 
 if ($PSVersionTable.PSVersion.Major -lt 5) {
     Die "PowerShell 5.1 or newer is required (found $($PSVersionTable.PSVersion))."
@@ -95,16 +120,38 @@ Or build from source: go build -o gsc-mcp.exe ./cmd/gsc-mcp
     }
 }
 
-$asset   = "gsc-mcp-windows-$Arch.exe"
-$baseUrl = "https://github.com/$Repo/releases/latest/download"
-$binUrl  = "$baseUrl/$asset"
-$sumUrl  = "$baseUrl/checksums.txt"
-$dest    = [System.IO.Path]::Combine($InstallDir, 'gsc-mcp.exe')
+$asset       = "gsc-mcp-windows-$Arch.exe"
+$skillsAsset = 'gsc-mcp-skills.tar.gz'
+$baseUrl     = if ($env:GSC_MCP_BASE_URL) { $env:GSC_MCP_BASE_URL } else { "https://github.com/$Repo/releases/latest/download" }
+$binUrl      = "$baseUrl/$asset"
+$sumUrl      = "$baseUrl/checksums.txt"
+$skillsUrl   = "$baseUrl/$skillsAsset"
+$dest        = [System.IO.Path]::Combine($InstallDir, 'gsc-mcp.exe')
+
+# auto installs skills only when the parent of $SkillsDir already exists, so we
+# never create a Claude Code tree for someone who does not use Claude Code.
+$skillsParent = [System.IO.Path]::GetDirectoryName($SkillsDir)
+switch ($skillsMode) {
+    'always' { $doSkills = $true;  $skillsWhy = 'forced by -WithSkills' }
+    'never'  { $doSkills = $false; $skillsWhy = 'disabled by -NoSkills' }
+    'auto'   {
+        if (Test-Path -LiteralPath $skillsParent -PathType Container) {
+            $doSkills = $true;  $skillsWhy = "$skillsParent exists"
+        } else {
+            $doSkills = $false; $skillsWhy = "$skillsParent does not exist"
+        }
+    }
+    default  { Die "invalid GSC_MCP_SKILLS='$skillsMode' (want auto, always or never)" }
+}
+
+# Printed in the closing Next steps block; both branches below overwrite it.
+$skillsNote = "skills: skipped ($skillsWhy)"
 
 Log "gsc-mcp installer"
 Log "  repo:    $Repo"
 Log "  asset:   $asset"
 Log "  install: $dest"
+if ($doSkills) { Log "  skills:  $SkillsDir ($skillsWhy)" } else { Log "  skills:  skipped ($skillsWhy)" }
 if ($DryRun) { Log "  mode:    dry-run (no download, no write)" }
 
 if ($DryRun) {
@@ -113,6 +160,14 @@ if ($DryRun) {
     Log "would verify sha256 of $asset"
     Log "would install to $dest"
     Log "would run: Unblock-File $dest"
+    if ($doSkills) {
+        Log "would download: $skillsUrl"
+        Log "would verify sha256 of $skillsAsset"
+        Log "would unpack skills into $SkillsDir (existing skill dirs left untouched)"
+        $skillsNote = "skills: dry-run, nothing written (would unpack into $SkillsDir)"
+    } else {
+        Log "would skip skills ($skillsWhy)"
+    }
 } else {
     # Windows PowerShell 5.1 defaults to older TLS on some builds; GitHub requires 1.2+.
     try {
@@ -201,6 +256,83 @@ Original error: $($_.Exception.Message)
         } catch {
             Log "PATH: check skipped ($($_.Exception.Message)). Use the absolute path: $dest"
         }
+
+        if ($doSkills) {
+            # Skills are a bonus, not the product: a release without the asset
+            # must still leave a working binary behind, so a missing asset warns
+            # and continues. A checksum mismatch is different - that is
+            # tampering, and Die stops the script.
+            $skillsOk = $true
+            $tmpSkills = [System.IO.Path]::Combine($tmp, $skillsAsset)
+
+            Log "downloading $skillsAsset..."
+            try {
+                Invoke-WebRequest -Uri $skillsUrl -OutFile $tmpSkills -UseBasicParsing
+            } catch {
+                Log "note: this release has no $skillsAsset; skills not installed."
+                Log "      The binary works without them. Copy .agents/skills/* from the"
+                Log "      repo into $SkillsDir by hand if you want them."
+                $skillsNote = "skills: not installed (release has no $skillsAsset)"
+                $skillsOk = $false
+            }
+
+            # tar.exe (bsdtar) ships with Windows 10 1803 and newer. Expand-Archive
+            # only handles .zip, and PowerShell 5.1 cannot read gzip on its own.
+            if ($skillsOk -and -not (Get-Command tar -ErrorAction SilentlyContinue)) {
+                Log "note: tar not found; skills not installed."
+                Log "      Windows 10 1803+ ships tar.exe. Copy .agents/skills/* from"
+                Log "      the repo into $SkillsDir by hand instead."
+                $skillsNote = "skills: not installed (tar not available)"
+                $skillsOk = $false
+            }
+
+            if ($skillsOk) {
+                $skillsPattern = '\s' + [regex]::Escape($skillsAsset) + '\s*$'
+                $skillsEntry = Get-Content -LiteralPath $tmpSums | Where-Object { $_ -match $skillsPattern } | Select-Object -First 1
+                if (-not $skillsEntry) {
+                    Log "note: no checksum entry for $skillsAsset; skills not installed."
+                    $skillsNote = "skills: not installed (no checksum entry)"
+                    $skillsOk = $false
+                } else {
+                    $expectedSkills = ($skillsEntry -split '\s+')[0]
+                    $actualSkills   = (Get-FileHash -LiteralPath $tmpSkills -Algorithm SHA256).Hash
+                    if ($expectedSkills -ne $actualSkills) {
+                        Die "checksum mismatch for $skillsAsset (expected $expectedSkills, got $actualSkills)"
+                    }
+                    Log "checksum OK"
+                }
+            }
+
+            if ($skillsOk) {
+                $stage = [System.IO.Path]::Combine($tmp, 'skills')
+                New-Item -ItemType Directory -Path $stage -Force | Out-Null
+                & tar -xzf $tmpSkills -C $stage
+                if ($LASTEXITCODE -ne 0) { Die "could not unpack $skillsAsset" }
+
+                New-Item -ItemType Directory -Path $SkillsDir -Force | Out-Null
+                $added = 0
+                $kept  = 0
+                foreach ($dir in @(Get-ChildItem -LiteralPath $stage -Directory)) {
+                    $target = [System.IO.Path]::Combine($SkillsDir, $dir.Name)
+                    if (Test-Path -LiteralPath $target) {
+                        # Never clobber: a local edit to a skill is worth more
+                        # than our copy.
+                        Log "  keep $($dir.Name) (already in $SkillsDir, left untouched)"
+                        $kept++
+                        continue
+                    }
+                    Copy-Item -LiteralPath $dir.FullName -Destination $target -Recurse
+                    Log "  add  $($dir.Name)"
+                    $added++
+                }
+                Log "skills: $added added, $kept already present -> $SkillsDir"
+                $skillsNote = "skills: $added added, $kept already present in $SkillsDir"
+            }
+        } else {
+            Log "skills: skipped ($skillsWhy)"
+            Log "  Copy .agents/skills/* from the repo into a directory your agent reads,"
+            Log "  or re-run with -WithSkills to unpack them into $SkillsDir."
+        }
     } finally {
         $ProgressPreference = $prevProgress
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
@@ -208,6 +340,7 @@ Original error: $($_.Exception.Message)
 }
 
 Log @"
+$skillsNote
 
 Next steps (this installer does not run them):
 

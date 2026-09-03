@@ -5,6 +5,7 @@ package setup
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -225,9 +226,20 @@ func Run(opts Options) (Result, error) {
 // Each branch exists because the raw error points somewhere unhelpful: the
 // quota-project 403 reads as a Search Console permission problem, and a token
 // rejection reads as a broken install.
+// errNoProperties: an authenticated but empty list_sites is a failure, not OK
+// (verdict recorded in FACTS.md).
+var errNoProperties = errors.New("no Search Console property is visible to the authenticated Google account")
+
 func explainVerifyFailure(err error, gcloudPath string, logf func(string, ...any)) {
 	msg := strings.ToLower(err.Error())
 	switch {
+	case errors.Is(err, errNoProperties):
+		logf("  Diagnosis: most common cause is a different Google account picked in the browser")
+		logf("  during `gcloud auth application-default login`. Log in again and choose")
+		logf("  the account that can see the properties in the Search Console UI:")
+		logf("    gcloud auth application-default login --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform")
+		logf("  If that account is already the right one, it has not been added to any")
+		logf("  property yet — add it in Search Console under Settings > Users and permissions.")
 	case strings.Contains(msg, "quota project"):
 		logf("  Diagnosis: the credentials have no quota project. This is NOT a property")
 		logf("  permission problem — do not add users in the Search Console UI.")
@@ -305,6 +317,16 @@ func verifyListSites(logf func(string, ...any)) error {
 	n := 0
 	if resp != nil {
 		n = len(resp.SiteEntry)
+	}
+	return checkPropertyCount(n, logf)
+}
+
+// checkPropertyCount turns a successful list_sites into the doctor verdict.
+// Split out of verifyListSites so the zero case is unit-testable without a
+// live API call or a client seam.
+func checkPropertyCount(n int, logf func(string, ...any)) error {
+	if n == 0 {
+		return errNoProperties
 	}
 	logf("  list_sites OK — %d propert(y/ies) visible", n)
 	return nil
