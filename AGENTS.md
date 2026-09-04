@@ -255,6 +255,14 @@ The three computed tools return arithmetic, not advice. `ctr-gaps` and
 from producing bad recommendations — read the skill before acting on those
 tools' output.
 
+Since v0.6.0 `install.sh` and `install.ps1` unpack these skills into
+`~/.claude/skills/` alongside the binary. A skill directory that is already
+there is never overwritten — the installer prints `keep` and moves on. That
+protects local edits, and it also means **re-running the installer does not
+upgrade a skill the user already has**. If a user reports skill behaviour that
+does not match this document, check whether `~/.claude/skills/<name>/` holds an
+older copy; moving it aside and re-running the installer is the fix.
+
 ## Native agent configuration
 
 This repository places each agent's configuration in the location that agent

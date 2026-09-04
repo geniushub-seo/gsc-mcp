@@ -304,6 +304,21 @@ Six skills ship with the server, so you don't have to invent the prompt yourself
 
 Claude Code's plugin and Codex discover the shared skills in `.agents/skills/`. Cursor receives the same safe defaults from its project rule; its agent can read a `SKILL.md` when a specific analysis is requested.
 
+**`curl | bash` installs the skills too** (since v0.6.0): after the binary lands, the
+installer downloads `gsc-mcp-skills.tar.gz`, verifies it against the same
+`checksums.txt`, and unpacks it into `~/.claude/skills/`. Three rules:
+
+- **A skill already there is never overwritten.** If that directory already holds
+  `monthly-report`, it is left exactly as it is and the installer prints `keep`. Your
+  local edits survive — but so does an *old* copy, so **upgrading does not replace a
+  skill you already have**. To take a newer one, move that directory aside and re-run
+  the installer.
+- **Skills only install when `~/.claude/` already exists**, so nothing is written into
+  the home directory of someone who does not use Claude Code. `--with-skills` forces
+  it; `--no-skills` turns it off.
+- **An older release without that asset does not fail the install** — one warning line,
+  and the binary still lands.
+
 ## Tools
 
 | Tool | Underlying API | Writes | Notes |

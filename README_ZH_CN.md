@@ -228,6 +228,16 @@ chmod 600 ~/.config/gsc-mcp/service-account.json
 
 Claude Code plugin 与 Codex 都会读取共用的 `.agents/skills/`。Cursor 有同一套安全默认值的 project rule；需要特定分析时，agent 可读取对应的 `SKILL.md`。
 
+**`curl | bash` 安装会一并装 skill**（v0.6.0 起）：binary 装好后 installer 会下载
+`gsc-mcp-skills.tar.gz`（用同一份 `checksums.txt` 校验）解压到 `~/.claude/skills/`。三条规则：
+
+- **同名的不覆盖。** 那个目录里已经有 `monthly-report`，就原样保留，只打印一行 `keep`。
+  改过的本地版本不会被覆盖——但这也意味着**升级不会换成新版 skill**。要拿新版，先把
+  `~/.claude/skills/` 下面那个目录移走，再重跑 installer。
+- **只在 `~/.claude/` 已存在时才装**，不给没在用 Claude Code 的人往主目录里写东西。
+  `--with-skills` 强制安装，`--no-skills` 完全不装。
+- **旧版 release 没有这个资产也不会失败**，只打印一行警告，binary 照样装好。
+
 ## 工具清单
 
 | Tool | 底层 API | 写入 | 说明 |
