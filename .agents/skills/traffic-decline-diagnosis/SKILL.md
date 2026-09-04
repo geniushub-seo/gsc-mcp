@@ -1,6 +1,6 @@
 ---
 name: traffic-decline-diagnosis
-description: Diagnose why a site or page lost search traffic by separating ranking loss from demand loss from CTR loss. Use when asked why traffic dropped, why clicks are down, what happened after an update, whether a decline is the site's fault, or which pages are declining.
+description: Diagnose why a site or page lost search traffic by separating ranking loss from demand loss from CTR loss. Use when asked why traffic dropped, why clicks are down, what a Google algorithm update did to the site, whether a decline is the site's fault, or which pages are declining.
 ---
 
 # Traffic Decline Diagnosis

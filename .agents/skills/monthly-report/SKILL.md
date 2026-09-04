@@ -1,6 +1,6 @@
 ---
 name: monthly-report
-description: Produce a client-ready monthly search performance report with brand and non-brand split, winners, losers, and recommended actions. Use when asked for a monthly report, a site summary, how the site performed, or a client update.
+description: Produce a client-ready monthly search performance report with brand and non-brand split, winners, losers, and recommended actions. Use when asked for a monthly report, a recurring site summary, how the site performed over a period, or a client-facing performance update. Not for diagnosing a specific drop — that is traffic-decline-diagnosis.
 ---
 
 # Monthly Search Report

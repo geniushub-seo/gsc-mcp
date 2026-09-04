@@ -1,0 +1,48 @@
+{
+  "_comment": "Trigger test set for the six public skills. Each case is a real user phrasing paired with the skill that should win. The judge is any agent that can see ONLY the six name+description pairs (never the SKILL.md bodies) — that is exactly what a client sees when routing. Half the cases are Traditional Chinese because the operators and their clients ask in Chinese while every description is written in English; that mismatch is the single most likely trigger failure and must stay covered. expect_none cases must select no skill at all.",
+  "cases": [
+    {"q": "哪些頁面排名很好但沒人點？", "expect": "ctr-gaps"},
+    {"q": "我該改哪幾頁的標題？", "expect": "ctr-gaps"},
+    {"q": "Which pages have a low CTR for their position?", "expect": "ctr-gaps"},
+    {"q": "有沒有靠現成排名就能拿到流量的機會？", "expect": "ctr-gaps"},
+    {"q": "這頁排第 3 名卻幾乎沒流量，為什麼？", "expect": "ctr-gaps"},
+    {"q": "Are my own pages competing for the same keyword?", "expect": "ctr-gaps"},
+
+    {"q": "流量為什麼掉了？", "expect": "traffic-decline-diagnosis"},
+    {"q": "這個月點擊數掉很多", "expect": "traffic-decline-diagnosis"},
+    {"q": "Google 更新之後我們是不是被影響了？", "expect": "traffic-decline-diagnosis"},
+    {"q": "Which pages are losing clicks?", "expect": "traffic-decline-diagnosis"},
+    {"q": "流量掉是我們網站的問題，還是大家都掉？", "expect": "traffic-decline-diagnosis"},
+    {"q": "Why are clicks down compared with last month?", "expect": "traffic-decline-diagnosis"},
+
+    {"q": "幫我做這個月的報告", "expect": "monthly-report"},
+    {"q": "客戶月報要交了", "expect": "monthly-report"},
+    {"q": "How did the site perform this month?", "expect": "monthly-report"},
+    {"q": "給我一份網站表現的總覽", "expect": "monthly-report"},
+    {"q": "Put together a client update for August", "expect": "monthly-report"},
+
+    {"q": "除了搜我公司名，還有誰找得到我？", "expect": "nonbrand-performance"},
+    {"q": "非品牌流量成長多少？", "expect": "nonbrand-performance"},
+    {"q": "我們的 SEO 到底有沒有效？", "expect": "nonbrand-performance"},
+    {"q": "Show organic growth with our brand terms excluded", "expect": "nonbrand-performance"},
+    {"q": "有多少人是本來就知道我們才搜的？", "expect": "nonbrand-performance"},
+
+    {"q": "Google 有沒有看到我的新頁面？", "expect": "index-health"},
+    {"q": "這頁在搜尋裡完全找不到", "expect": "index-health"},
+    {"q": "sitemap 是不是有問題？", "expect": "index-health"},
+    {"q": "Is this URL indexed?", "expect": "index-health"},
+    {"q": "canonical 好像設錯了", "expect": "index-health"},
+    {"q": "Googlebot 有來爬嗎？", "expect": "index-health"},
+
+    {"q": "幫我查上個月手機的點擊數", "expect": "gsc-recipes"},
+    {"q": "哪個國家的流量最多？", "expect": "gsc-recipes"},
+    {"q": "我只想看 /blog/ 底下的表現", "expect": "gsc-recipes"},
+    {"q": "What dimensions can I break the data down by?", "expect": "gsc-recipes"},
+    {"q": "比較這兩週跟前兩週", "expect": "gsc-recipes"},
+
+    {"q": "幫我把這個 Go 函式改個名字", "expect": "none"},
+    {"q": "我的 Google Ads 花費太高了", "expect": "none"},
+    {"q": "幫我寫一封信給客戶", "expect": "none"},
+    {"q": "gsc-mcp 要怎麼安裝？", "expect": "none"}
+  ]
+}
