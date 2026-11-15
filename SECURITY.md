@@ -10,10 +10,10 @@ Only the [latest release](https://github.com/geniushub-seo/gsc-mcp/releases/late
 Please do **not** post vulnerability details, credentials, or real Search Console data in a public issue.
 請**不要**在公開 issue 貼漏洞細節、憑證或真實的 Search Console 資料。
 
-1. Open an issue titled `Security: contact request` with no technical details.
-   開一個標題為 `Security: contact request` 的 issue，不要寫技術細節。
-2. The maintainer will reply there and arrange a private channel.
-   維護者會在該 issue 回覆，並安排私下的溝通管道。
+Use GitHub's private reporting: open the repository's **Security** tab, click **Report a vulnerability**, and describe the issue there. Only the maintainers can see it.
+請用 GitHub 的私下回報：打開本 repo 的 **Security** 分頁，點 **Report a vulnerability**，在裡面描述問題。只有維護者看得到。
+
+Direct link / 直接連結：https://github.com/geniushub-seo/gsc-mcp/security/advisories/new
 
 ## What this server touches / 本 server 會碰到什麼
 
