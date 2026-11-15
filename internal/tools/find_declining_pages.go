@@ -216,7 +216,7 @@ func findDecliningPages(ctx context.Context, client *gscclient.Client, input fin
 	aEnd, bEnd := normalized.PeriodAEnd, normalized.PeriodBEnd
 	excludedDays := 0
 
-	_, err := gscclient.WithResolvedSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (struct{}, error) {
+	_, err := gscclient.WithSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (struct{}, error) {
 		resolvedSiteURL = resolved
 
 		// Incomplete days are the most likely way this tool produces a wrong

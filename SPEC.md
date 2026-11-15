@@ -55,18 +55,13 @@
 
 `www.` 前綴與 port 在推導 apex 時剝除。
 
-#### 403 property 探索救援
+#### 403 不換 property
 
-正規化後的呼叫回 **403**（僅 403，其他錯誤直接往上拋）時：
+正規化後的值只打一次，**不得自動改打別的 property**（讀寫皆同）：靜默改對象會把 `/blog/` 查成全站，或把 sitemap 刪在沒人指名的 property 上（2026-11-15 拿掉救援）。
 
-1. 呼叫 `sites.list`
-2. 用輸入的 apex domain 比對，在**尚未 403 失敗的候選**裡偏好 `sc-domain:` > URL-prefix
-3. 排除步驟 1 剛失敗的那個 URL（`ResolveSiteURL` 的 `exclude`），找到就用解析結果重試一次
-4. 找不到則回 `permission_denied`，**訊息中列出所有可存取的 property**
+回 **403**（quota project 那種除外）時呼叫 `sites.list`，回 `permission_denied`，訊息列出所有可存取 property 與權限等級，由呼叫端自己挑；`sites.list` 也失敗就回原錯誤。
 
-同一 apex 下若 `sc-domain:` 無權限而 URL-prefix 有權限，救援必須落到後者，不得再挑回剛 403 的那支。
-
-用泛型包裝器 `WithResolvedSiteURL[T]` 實作，九支共用一條路徑，不逐支重寫。
+用泛型包裝器 `WithSiteURL[T]` 實作，九支共用。
 
 #### Stringified array 參數修復
 
@@ -82,7 +77,7 @@
 
 #### 共用輸出欄位
 
-每支 tool 的成功輸出都含 `queried_at`（UTC RFC3339），以及實際送出的 `site_url`（正規化或救援後的值，不是使用者原始輸入）。
+每支 tool 的成功輸出都含 `queried_at`（UTC RFC3339），以及實際送出的 `site_url`（正規化後的值，不是使用者原始輸入）。
 
 ### 3.1 `query_search_analytics`
 

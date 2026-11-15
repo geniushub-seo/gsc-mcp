@@ -133,7 +133,7 @@ func inspectURL(ctx context.Context, client *gscclient.Client, quota *gscclient.
 		if resolvedSiteURL != "" {
 			resp, callErr = client.InspectURL(ctx, resolvedSiteURL, u, languageCode)
 		} else {
-			resp, callErr = gscclient.WithResolvedSiteURL(ctx, client, input.SiteURL, func(ctx context.Context, resolved string) (*searchconsole.InspectUrlIndexResponse, error) {
+			resp, callErr = gscclient.WithSiteURL(ctx, client, input.SiteURL, func(ctx context.Context, resolved string) (*searchconsole.InspectUrlIndexResponse, error) {
 				resolvedSiteURL = resolved
 				return client.InspectURL(ctx, resolved, u, languageCode)
 			})

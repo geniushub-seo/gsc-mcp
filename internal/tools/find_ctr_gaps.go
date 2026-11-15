@@ -204,7 +204,7 @@ func findCTRGaps(ctx context.Context, client *gscclient.Client, input findCTRGap
 	var scanned []*searchconsole.ApiDataRow
 	var firstIncompleteDate, probeNote string
 
-	_, err := gscclient.WithResolvedSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (struct{}, error) {
+	_, err := gscclient.WithSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (struct{}, error) {
 		resolvedSiteURL = resolved
 
 		// The freshness probe is a separate DATE-grouped call because metadata is

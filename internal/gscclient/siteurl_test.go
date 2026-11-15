@@ -2,8 +2,9 @@ package gscclient
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -51,136 +52,6 @@ func TestNormalizeSiteURL(t *testing.T) {
 	}
 }
 
-func TestResolveSiteURL_PrefersDomainProperty(t *testing.T) {
-	t.Parallel()
-	lister := &fakeSiteLister{
-		sites: []*searchconsole.WmxSite{
-			{SiteUrl: "https://example.com/", PermissionLevel: "SITE_OWNER"},
-			{SiteUrl: "sc-domain:example.com", PermissionLevel: "SITE_OWNER"},
-		},
-	}
-
-	resolved, err := ResolveSiteURL(context.Background(), lister, "example.com", "")
-	if err != nil {
-		t.Fatalf("ResolveSiteURL error: %v", err)
-	}
-	if resolved != "sc-domain:example.com" {
-		t.Fatalf("expected sc-domain property, got %q", resolved)
-	}
-}
-
-func TestResolveSiteURL_FallsBackToURLPrefix(t *testing.T) {
-	t.Parallel()
-	lister := &fakeSiteLister{
-		sites: []*searchconsole.WmxSite{
-			{SiteUrl: "https://example.com/", PermissionLevel: "SITE_OWNER"},
-		},
-	}
-
-	resolved, err := ResolveSiteURL(context.Background(), lister, "example.com", "")
-	if err != nil {
-		t.Fatalf("ResolveSiteURL error: %v", err)
-	}
-	if resolved != "https://example.com/" {
-		t.Fatalf("expected URL-prefix property, got %q", resolved)
-	}
-}
-
-func TestResolveSiteURL_NotFoundListsAccessible(t *testing.T) {
-	t.Parallel()
-	lister := &fakeSiteLister{
-		sites: []*searchconsole.WmxSite{
-			{SiteUrl: "sc-domain:other.com", PermissionLevel: "SITE_OWNER"},
-		},
-	}
-
-	_, err := ResolveSiteURL(context.Background(), lister, "example.com", "")
-	if err == nil {
-		t.Fatal("expected error when no property found")
-	}
-	if !strings.Contains(err.Error(), "sc-domain:other.com") {
-		t.Fatalf("error should list accessible properties, got %q", err.Error())
-	}
-}
-
-// Same apex with unauthorized sc-domain: and authorized URL-prefix — the case
-// that previously re-selected the failed sc-domain and looped on 403.
-func TestResolveSiteURL_ExcludeFailedDomainPrefersURLPrefix(t *testing.T) {
-	t.Parallel()
-	lister := &fakeSiteLister{
-		sites: []*searchconsole.WmxSite{
-			{SiteUrl: "sc-domain:example.net", PermissionLevel: "SITE_UNVERIFIED_USER"},
-			{SiteUrl: "https://example.net/", PermissionLevel: "SITE_OWNER"},
-		},
-	}
-
-	resolved, err := ResolveSiteURL(context.Background(), lister, "example.net", "sc-domain:example.net")
-	if err != nil {
-		t.Fatalf("ResolveSiteURL error: %v", err)
-	}
-	if resolved != "https://example.net/" {
-		t.Fatalf("expected URL-prefix after excluding failed sc-domain, got %q", resolved)
-	}
-}
-
-func TestWithResolvedSiteURL_SkipsFailedScDomainOnSameApex(t *testing.T) {
-	t.Parallel()
-	lister := &fakeSiteLister{
-		sites: []*searchconsole.WmxSite{
-			{SiteUrl: "sc-domain:example.net", PermissionLevel: "SITE_UNVERIFIED_USER"},
-			{SiteUrl: "https://example.net/", PermissionLevel: "SITE_OWNER"},
-		},
-	}
-
-	var tried []string
-	result, err := WithResolvedSiteURL(context.Background(), lister, "example.net", func(_ context.Context, resolved string) (string, error) {
-		tried = append(tried, resolved)
-		if resolved == "sc-domain:example.net" {
-			return "", &googleapi.Error{Code: 403, Message: "forbidden"}
-		}
-		return resolved, nil
-	})
-	if err != nil {
-		t.Fatalf("WithResolvedSiteURL error: %v", err)
-	}
-	if result != "https://example.net/" {
-		t.Fatalf("expected URL-prefix success, got %q", result)
-	}
-	if len(tried) != 2 {
-		t.Fatalf("expected 2 attempts, got %v", tried)
-	}
-	if tried[0] != "sc-domain:example.net" || tried[1] != "https://example.net/" {
-		t.Fatalf("attempt order = %v, want sc-domain then URL-prefix", tried)
-	}
-}
-
-func TestWithResolvedSiteURL_RetriesOn403(t *testing.T) {
-	t.Parallel()
-	lister := &fakeSiteLister{
-		sites: []*searchconsole.WmxSite{
-			{SiteUrl: "https://example.com/", PermissionLevel: "SITE_OWNER"},
-		},
-	}
-
-	calls := 0
-	result, err := WithResolvedSiteURL(context.Background(), lister, "example.com", func(_ context.Context, resolved string) (string, error) {
-		calls++
-		if resolved == "sc-domain:example.com" {
-			return "", &googleapi.Error{Code: 403, Message: "forbidden"}
-		}
-		return resolved, nil
-	})
-	if err != nil {
-		t.Fatalf("WithResolvedSiteURL error: %v", err)
-	}
-	if result != "https://example.com/" {
-		t.Fatalf("expected resolved URL-prefix, got %q", result)
-	}
-	if calls != 2 {
-		t.Fatalf("expected 2 calls, got %d", calls)
-	}
-}
-
 func TestNormalizeSiteURL_BareDomainStripsPath(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -201,91 +72,6 @@ func TestNormalizeSiteURL_BareDomainStripsPath(t *testing.T) {
 	}
 }
 
-func TestWithResolvedSiteURL_UsesOriginalInputForResolve(t *testing.T) {
-	t.Parallel()
-	lister := &fakeSiteLister{
-		sites: []*searchconsole.WmxSite{
-			{SiteUrl: "sc-domain:example.com", PermissionLevel: "SITE_OWNER"},
-		},
-	}
-
-	calls := 0
-	result, err := WithResolvedSiteURL(context.Background(), lister, "https://example.com/blog", func(_ context.Context, resolved string) (string, error) {
-		calls++
-		if resolved == "https://example.com/blog/" {
-			return "", &googleapi.Error{Code: 403, Message: "forbidden"}
-		}
-		return resolved, nil
-	})
-	if err != nil {
-		t.Fatalf("WithResolvedSiteURL error: %v", err)
-	}
-	if result != "sc-domain:example.com" {
-		t.Fatalf("expected resolved domain property, got %q", result)
-	}
-	if calls != 2 {
-		t.Fatalf("expected 2 calls, got %d", calls)
-	}
-}
-
-func TestResolveSiteURL_NotFound_ReturnsPermissionDenied(t *testing.T) {
-	t.Parallel()
-	lister := &fakeSiteLister{
-		sites: []*searchconsole.WmxSite{
-			{SiteUrl: "sc-domain:other.com", PermissionLevel: "SITE_OWNER"},
-		},
-	}
-
-	_, err := ResolveSiteURL(context.Background(), lister, "example.com", "")
-	if err == nil {
-		t.Fatal("expected error when no property found")
-	}
-
-	var clientErr Error
-	if !errors.As(err, &clientErr) {
-		t.Fatalf("expected gscclient.Error, got %T", err)
-	}
-	if clientErr.Code != ErrPermissionDenied {
-		t.Fatalf("expected permission_denied, got %q", clientErr.Code)
-	}
-	if !strings.Contains(clientErr.Message, "sc-domain:other.com") {
-		t.Fatalf("error should list accessible properties, got %q", clientErr.Message)
-	}
-}
-
-func TestResolveSiteURL_ListsEveryAccessibleProperty(t *testing.T) {
-	t.Parallel()
-	sites := make([]*searchconsole.WmxSite, 14)
-	for i := range sites {
-		sites[i] = &searchconsole.WmxSite{SiteUrl: fmt.Sprintf("sc-domain:property-%02d.example.com", i)}
-	}
-
-	_, err := ResolveSiteURL(context.Background(), &fakeSiteLister{sites: sites}, "example.com", "")
-	var clientErr Error
-	if !errors.As(err, &clientErr) {
-		t.Fatalf("expected gscclient.Error, got %T", err)
-	}
-	for i := range sites {
-		if !strings.Contains(clientErr.Message, sites[i].SiteUrl) {
-			t.Fatalf("message omitted property %q: %q", sites[i].SiteUrl, clientErr.Message)
-		}
-	}
-}
-
-func TestResolveSiteURL_ExcludedOnlyMatchReportsDeniedAccess(t *testing.T) {
-	t.Parallel()
-	_, err := ResolveSiteURL(context.Background(), &fakeSiteLister{sites: []*searchconsole.WmxSite{
-		{SiteUrl: "sc-domain:example.com"},
-	}}, "example.com", "sc-domain:example.com")
-	var clientErr Error
-	if !errors.As(err, &clientErr) {
-		t.Fatalf("expected gscclient.Error, got %T", err)
-	}
-	if !strings.Contains(clientErr.Message, "access to it was denied") {
-		t.Fatalf("message must distinguish denied access, got %q", clientErr.Message)
-	}
-}
-
 func TestMapGoogleAPIError_PassthroughClientError(t *testing.T) {
 	t.Parallel()
 	original := NewError(ErrPermissionDenied, "no access", "ask owner")
@@ -298,14 +84,128 @@ func TestMapGoogleAPIError_PassthroughClientError(t *testing.T) {
 	}
 }
 
-func TestWithResolvedSiteURL_DoesNotRetryNon403(t *testing.T) {
+// recordingCall returns a site-scoped call that fails with err and records
+// every site URL it was invoked with.
+func recordingCall(err error) (func(context.Context, string) (string, error), *[]string) {
+	var calls []string
+	return func(_ context.Context, siteURL string) (string, error) {
+		calls = append(calls, siteURL)
+		return "", err
+	}, &calls
+}
+
+// TestWithSiteURL_403DoesNotSwitchProperty is the core guarantee: a 403 never
+// sends the call to another property, even when an accessible property for the
+// same domain exists. The error lists that property instead.
+func TestWithSiteURL_403DoesNotSwitchProperty(t *testing.T) {
 	t.Parallel()
-	lister := &fakeSiteLister{}
+	lister := &fakeSiteLister{sites: []*searchconsole.WmxSite{
+		{SiteUrl: "sc-domain:example.com", PermissionLevel: "siteUnverifiedUser"},
+		{SiteUrl: "https://example.com/", PermissionLevel: "siteOwner"},
+	}}
+	call, calls := recordingCall(&googleapi.Error{Code: 403, Message: "forbidden"})
+
+	_, err := WithSiteURL(context.Background(), lister, "example.com", call)
+
+	if len(*calls) != 1 || (*calls)[0] != "sc-domain:example.com" {
+		t.Fatalf("calls = %v, want exactly one call to sc-domain:example.com", *calls)
+	}
+	var cerr Error
+	if !errors.As(err, &cerr) || cerr.Code != ErrPermissionDenied {
+		t.Fatalf("err = %v, want permission_denied", err)
+	}
+	for _, want := range []string{"https://example.com/ (siteOwner)", "sc-domain:example.com (siteUnverifiedUser)"} {
+		if !strings.Contains(cerr.Message, want) {
+			t.Errorf("message %q does not list %q", cerr.Message, want)
+		}
+	}
+}
+
+// TestWithSiteURL_ExplicitPrefixIsNotWidened covers the read-side harm: a
+// trailing-slash URL-prefix input must not be widened to the whole domain.
+func TestWithSiteURL_ExplicitPrefixIsNotWidened(t *testing.T) {
+	t.Parallel()
+	lister := &fakeSiteLister{sites: []*searchconsole.WmxSite{
+		{SiteUrl: "sc-domain:example.com", PermissionLevel: "siteOwner"},
+		{SiteUrl: "https://example.com/shop/", PermissionLevel: "siteOwner"},
+	}}
+	call, calls := recordingCall(&googleapi.Error{Code: 403, Message: "forbidden"})
+
+	_, err := WithSiteURL(context.Background(), lister, "https://example.com/blog/", call)
+
+	if len(*calls) != 1 || (*calls)[0] != "https://example.com/blog/" {
+		t.Fatalf("calls = %v, want exactly one call to https://example.com/blog/", *calls)
+	}
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+}
+
+// TestWithSiteURL_QuotaProject403PassesThrough: a 403 about a missing quota
+// project is not a property problem, so listing properties would mislead.
+func TestWithSiteURL_QuotaProject403PassesThrough(t *testing.T) {
+	t.Parallel()
+	lister := &fakeSiteLister{err: errors.New("lister must not be called")}
+	orig := &googleapi.Error{Code: 403, Message: "Your application is authenticating by using local Application Default Credentials. The searchconsole.googleapis.com API requires a quota project, which is not set by default."}
+	call, calls := recordingCall(orig)
+
+	_, err := WithSiteURL(context.Background(), lister, "example.com", call)
+
+	var gerr *googleapi.Error
+	if len(*calls) != 1 || !errors.As(err, &gerr) || gerr != orig {
+		t.Fatalf("calls = %v, err = %v; want one call and the original error", *calls, err)
+	}
+}
+
+func TestWithSiteURL_ListFailureReturnsOriginal403(t *testing.T) {
+	t.Parallel()
+	orig := &googleapi.Error{Code: 403, Message: "forbidden"}
+	call, _ := recordingCall(orig)
+
+	_, err := WithSiteURL(context.Background(), &fakeSiteLister{err: errors.New("list failed")}, "example.com", call)
+
+	var gerr *googleapi.Error
+	if !errors.As(err, &gerr) || gerr != orig {
+		t.Fatalf("err = %v, want the original 403", err)
+	}
+}
+
+func TestWithSiteURL_DoesNotRetryNon403(t *testing.T) {
+	t.Parallel()
 	wantErr := errors.New("some other error")
-	_, err := WithResolvedSiteURL(context.Background(), lister, "example.com", func(_ context.Context, _ string) (string, error) {
-		return "", wantErr
-	})
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("expected original error, got %v", err)
+	call, calls := recordingCall(wantErr)
+
+	_, err := WithSiteURL(context.Background(), &fakeSiteLister{}, "example.com", call)
+
+	if !errors.Is(err, wantErr) || len(*calls) != 1 {
+		t.Fatalf("calls = %v, err = %v; want one call and the original error", *calls, err)
+	}
+}
+
+// TestNormalizeSiteURL_IdempotentOnListedProperties guards the premise the
+// no-switch design rests on: a site_url copied verbatim from list_sites must
+// reach the API unchanged, or a caller following the 403 advice can never hit
+// the property it picked.
+func TestNormalizeSiteURL_IdempotentOnListedProperties(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("testdata/sites_list.json")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	var resp searchconsole.SitesListResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("parse fixture: %v", err)
+	}
+	if len(resp.SiteEntry) == 0 {
+		t.Fatal("fixture has no siteEntry")
+	}
+	extra := []string{"http://example.org/", "https://www.example.org/", "https://example.org/blog/", "https://example.org:8080/"}
+	for _, e := range resp.SiteEntry {
+		extra = append(extra, e.SiteUrl)
+	}
+	for _, siteURL := range extra {
+		if got := NormalizeSiteURL(siteURL); got != siteURL {
+			t.Errorf("NormalizeSiteURL(%q) = %q; a listed site_url must pass through unchanged", siteURL, got)
+		}
 	}
 }

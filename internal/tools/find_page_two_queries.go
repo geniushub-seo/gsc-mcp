@@ -175,7 +175,7 @@ func findPageTwoQueries(ctx context.Context, client *gscclient.Client, input fin
 	var scanned []*searchconsole.ApiDataRow
 	var firstIncompleteDate, probeNote string
 
-	_, err := gscclient.WithResolvedSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (struct{}, error) {
+	_, err := gscclient.WithSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (struct{}, error) {
 		resolvedSiteURL = resolved
 
 		date, perr := probeFirstIncompleteDate(ctx, client, resolved, normalized.StartDate, normalized.EndDate, normalized.SearchType, normalized.DataState)

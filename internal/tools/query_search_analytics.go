@@ -196,7 +196,7 @@ func querySearchAnalytics(ctx context.Context, client *gscclient.Client, input q
 	req := buildSearchAnalyticsRequest(normalized, fetchLimit, startRow)
 
 	var resolvedSiteURL string
-	resp, err := gscclient.WithResolvedSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (*searchconsole.SearchAnalyticsQueryResponse, error) {
+	resp, err := gscclient.WithSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (*searchconsole.SearchAnalyticsQueryResponse, error) {
 		resolvedSiteURL = resolved
 		return client.QuerySearchAnalytics(ctx, resolved, req)
 	})

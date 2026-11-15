@@ -15,7 +15,7 @@ func Register(srv *mcp.Server, client *gscclient.Client, flags WriteFlags) {
 	srv.AddReceivingMiddleware(mcpfix.StructureSchemaValidationErrors())
 	srv.AddReceivingMiddleware(mcpfix.CoerceStringifiedArrayArgs())
 
-	quota := gscclient.NewDailyQuota(0)
+	quota := gscclient.NewDailyQuota()
 
 	registerListSites(srv, client)
 	registerGetSite(srv, client)

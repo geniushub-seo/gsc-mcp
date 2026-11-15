@@ -112,7 +112,7 @@ func manageSitemaps(ctx context.Context, client *gscclient.Client, flags WriteFl
 	var resolvedSiteURL string
 	var out manageSitemapsOutput
 
-	_, err := gscclient.WithResolvedSiteURL(ctx, client, input.SiteURL, func(ctx context.Context, resolved string) (struct{}, error) {
+	_, err := gscclient.WithSiteURL(ctx, client, input.SiteURL, func(ctx context.Context, resolved string) (struct{}, error) {
 		resolvedSiteURL = resolved
 		switch action {
 		case "list":

@@ -14,7 +14,7 @@ const (
 
 	descGetSite = "Get the permission level for a single Google Search Console property. " +
 		"site_url accepts flexible input (bare domain, full URL, or sc-domain:/URL-prefix forms) and is normalized automatically; " +
-		"on 403 the server resolves against accessible properties. " +
+		"it is never switched to another property; on 403 the error lists accessible properties. " +
 		"If unsure of the property format, call list_sites first."
 
 	descQuerySearchAnalytics = "Query Google Search Console search analytics. Returns clicks, impressions, CTR (clicks/impressions), and average position grouped by dimensions. " +
@@ -52,14 +52,14 @@ const (
 		"This does NOT: test the live on-page version, request indexing, list all indexed URLs on the site, or replace the bulk Page Indexing report in Search Console. " +
 		"Index status reflects what Google has stored and may lag the live page. " +
 		"Google applies URL Inspection API quotas — see https://developers.google.com/webmaster-tools/limits (do not assume a fixed daily number). " +
-		"Calls are sequential with a short delay. site_url accepts flexible input and resolves on 403."
+		"Calls are sequential with a short delay. site_url accepts flexible input; on 403 the error lists accessible properties."
 
 	descManageSitemaps = "List, get, submit, or delete sitemaps for a Search Console property. " +
 		"action=list and action=get are always available (read-only). " +
 		"action=submit requires GSC_ENABLE_WRITE=true. " +
 		"action=delete requires both GSC_ENABLE_WRITE=true and GSC_ALLOW_DESTRUCTIVE=true. " +
 		"When write flags are off this tool still appears in tools/list but write actions return write_disabled without calling the API. " +
-		"feedpath is required for get, submit, and delete. site_url accepts flexible input and resolves on 403."
+		"feedpath is required for get, submit, and delete. site_url accepts flexible input; on 403 the error lists accessible properties."
 
 	descFindCTRGaps = "Find query+page pairs that rank well but are clicked less than their position peers — the shortlist for title and meta-description rewrites. " +
 		"Scans up to 25,000 query+page rows server-side and returns them ranked by opportunity_clicks (impressions x (baseline_ctr - ctr)), largest first. " +
@@ -70,7 +70,7 @@ const (
 		"All thresholds (position_min 1, position_max 20, min_impressions 100, min_samples 10) are parameters and the values actually applied are echoed in 'assumptions'. " +
 		"Pass dimension_filter_groups with operator excludingRegex on dimension query to get non-brand CTR gaps. " +
 		"This tool returns facts and arithmetic, not advice: it does not tell you what to write. " +
-		"Dates are PT timezone. Google only returns metadata.firstIncompleteDate on a date-grouped request, so this tool issues its own dimensions=[date] probe and reports the result in assumptions.first_incomplete_date instead of assuming a fixed lag; that is why it makes two API calls. " +
+		"Dates are PT timezone. Google only returns metadata.firstIncompleteDate on a date-grouped request, so this tool issues its own dimensions=[date] probe and reports the result in assumptions.first_incomplete_date instead of assuming a fixed lag; that is why it makes two API calls (one under data_state=final, where Google never reports it). " +
 		"Read scan_capped: true means the 25,000-row scan was incomplete, so both the ranking and the baseline pool may be missing rows."
 
 	descFindPageTwoQueries = "Find queries ranking just off page one (default average position 11–20) with real impression volume — the shortlist for adding content or internal links. " +
@@ -79,7 +79,7 @@ const (
 		"Query-level clicks and impressions are summed across pages and position is the impression-weighted mean of the per-page positions, so it can differ slightly from a query-only query_search_analytics call; this is stated in 'assumptions'. " +
 		"Thresholds (position_min 11, position_max 20, min_impressions 50) are parameters and the applied values are echoed in 'assumptions'. " +
 		"Pass dimension_filter_groups with operator excludingRegex on dimension query to exclude brand terms. " +
-		"Returns facts only, no recommendations. Dates are PT timezone. Google only returns metadata.firstIncompleteDate on a date-grouped request, so this tool issues its own dimensions=[date] probe and reports it in assumptions; that is why it makes two API calls. " +
+		"Returns facts only, no recommendations. Dates are PT timezone. Google only returns metadata.firstIncompleteDate on a date-grouped request, so this tool issues its own dimensions=[date] probe and reports it in assumptions; that is why it makes two API calls (one under data_state=final, where Google never reports it). " +
 		"Read scan_capped before treating the list as complete."
 
 	descFindDecliningPages = "Find pages that lost clicks between two equal-length periods AND classify why: attribution is position_drop, impressions_drop, ctr_drop, or unclear. " +
@@ -92,5 +92,5 @@ const (
 		"Rows are ranked by clicks_delta ascending, i.e. biggest absolute loss first. " +
 		"Thresholds (min_click_drop 10, position_drop_threshold 1, impressions_drop_pct_threshold -10) are parameters and the applied values are echoed in 'assumptions'; min_click_drop is inclusive, so a page down exactly 10 clicks is reported. " +
 		"Returns facts and a classification, not advice on what to change. " +
-		"Dates are PT timezone. Makes three API calls (a date-grouped freshness probe plus one page-level scan per period, each up to 25,000 rows); read scan_capped before treating the list as complete."
+		"Dates are PT timezone. Makes three API calls (a date-grouped freshness probe, skipped under data_state=final, plus one page-level scan per period, each up to 25,000 rows); read scan_capped before treating the list as complete."
 )

@@ -95,7 +95,14 @@ func firstIncomplete(resp *searchconsole.SearchAnalyticsQueryResponse) (date, ho
 // Dimension filters are deliberately not passed: data freshness is a property
 // of the property, not of the filtered slice, and a filter that matches
 // nothing would return no metadata at all.
+//
+// Google fills firstIncompleteDate only when dataState is ALL (or HOURLY_ALL
+// with an HOUR grouping), so under FINAL the probe would be a guaranteed-empty
+// extra API call; skip it.
 func probeFirstIncompleteDate(ctx context.Context, client *gscclient.Client, resolvedSiteURL, start, end, searchType, dataState string) (string, error) {
+	if dataState == "FINAL" {
+		return "", nil
+	}
 	resp, err := client.QuerySearchAnalytics(ctx, resolvedSiteURL, &searchconsole.SearchAnalyticsQueryRequest{
 		StartDate:  start,
 		EndDate:    end,

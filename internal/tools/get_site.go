@@ -33,7 +33,7 @@ func registerGetSite(srv *mcp.Server, client *gscclient.Client) {
 }
 
 func getSite(ctx context.Context, client *gscclient.Client, siteURL string) (*mcp.CallToolResult, any, error) {
-	resp, err := gscclient.WithResolvedSiteURL(ctx, client, siteURL, func(ctx context.Context, resolved string) (*searchconsole.WmxSite, error) {
+	resp, err := gscclient.WithSiteURL(ctx, client, siteURL, func(ctx context.Context, resolved string) (*searchconsole.WmxSite, error) {
 		return client.GetSite(ctx, resolved)
 	})
 	if err != nil {

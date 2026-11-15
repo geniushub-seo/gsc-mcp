@@ -227,6 +227,41 @@ func TestContract_FindCTRGaps_ExcludingRegexReachesBothCalls(t *testing.T) {
 	}
 }
 
+// Google only reports firstIncompleteDate under dataState=all, so a FINAL
+// request must not spend an extra API call on a probe that cannot answer.
+func TestContract_FindCTRGaps_FinalSkipsFreshnessProbe(t *testing.T) {
+	t.Parallel()
+
+	queryPage := computedFixture(t, "searchanalytics_query_page.json")
+	srv, seen := analyticsRouter(t, func(req searchconsole.SearchAnalyticsQueryRequest) []byte {
+		return queryPage
+	})
+
+	client := newTestClient(t, srv.URL+"/")
+	result, _, err := findCTRGaps(context.Background(), client, findCTRGapsInput{
+		SiteURL:   "sc-domain:example.com",
+		StartDate: "2026-07-01",
+		EndDate:   "2026-07-28",
+		DataState: "final",
+	})
+	if err != nil {
+		t.Fatalf("findCTRGaps returned error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("findCTRGaps returned tool error: %s", extractText(t, result.Content))
+	}
+	if len(*seen) != 1 {
+		t.Fatalf("api calls = %d, want 1 (no freshness probe under final)", len(*seen))
+	}
+	if d := (*seen)[0].Dimensions; len(d) == 1 && d[0] == "DATE" {
+		t.Error("a DATE probe was sent under data_state=final")
+	}
+	out := decodeResult[findCTRGapsOutput](t, extractText(t, result.Content))
+	if strings.Contains(out.Note, "freshness probe failed") {
+		t.Errorf("skipped probe must not be reported as a failure, got note %q", out.Note)
+	}
+}
+
 func TestContract_FindPageTwoQueries_AggregatesAndRanksByImpressions(t *testing.T) {
 	t.Parallel()
 

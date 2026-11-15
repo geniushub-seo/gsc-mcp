@@ -11,8 +11,8 @@ import (
 	"google.golang.org/api/searchconsole/v1"
 )
 
-// SiteLister is the minimal interface required by ResolveSiteURL to look up
-// accessible Search Console properties.
+// SiteLister is the minimal interface WithSiteURL needs to list accessible
+// Search Console properties for a permission error.
 type SiteLister interface {
 	ListSites(ctx context.Context) (*searchconsole.SitesListResponse, error)
 }
@@ -84,118 +84,45 @@ func DroppedPathNote(input string) string {
 		trimmed, NormalizeSiteURL(trimmed), trimmed)
 }
 
-// ResolveSiteURL resolves a normalized site URL against the accessible GSC
-// properties. It is used as a fallback after the normalized form fails with a
-// 403.
+// WithSiteURL wraps a site-scoped API call. It normalizes siteURL and calls
+// exactly once against that property. It never retries against a different
+// property: which property a call reads from or writes to is the caller's
+// decision (SPEC.md §3.0), and a silent switch can turn a /blog/ query into a
+// whole-domain one or land a sitemap delete on a property nobody named.
 //
-// Resolution preference among candidates that are not equal to exclude:
-// sc-domain property first, then URL-prefix property for the same apex domain.
-// exclude is the URL that already returned 403; both match loops skip it so
-// rescue cannot re-select the failed property. If no match is found the error
-// message lists all accessible properties.
-func ResolveSiteURL(ctx context.Context, lister SiteLister, input, exclude string) (string, error) {
-	sites, err := lister.ListSites(ctx)
-	if err != nil {
-		return "", fmt.Errorf("resolving site URL: listing accessible properties: %w", err)
-	}
-
-	apex := extractApexFromInput(input)
-
-	for _, s := range sites.SiteEntry {
-		if exclude != "" && strings.EqualFold(s.SiteUrl, exclude) {
-			continue
-		}
-		if strings.EqualFold(s.SiteUrl, "sc-domain:"+apex) {
-			return s.SiteUrl, nil
-		}
-	}
-
-	for _, s := range sites.SiteEntry {
-		if exclude != "" && strings.EqualFold(s.SiteUrl, exclude) {
-			continue
-		}
-		if !strings.HasPrefix(s.SiteUrl, "http") {
-			continue
-		}
-		u, parseErr := url.Parse(s.SiteUrl)
-		if parseErr != nil {
-			continue
-		}
-		if extractApexDomain(u.Host) == apex {
-			return s.SiteUrl, nil
-		}
-	}
-
-	accessible := make([]string, len(sites.SiteEntry))
-	for i, s := range sites.SiteEntry {
-		accessible[i] = s.SiteUrl
-	}
-	if exclude != "" && siteURLMatchesApex(exclude, apex) {
-		return "", NewError(
-			ErrPermissionDenied,
-			fmt.Sprintf("a matching GSC property was found for %q, but access to it was denied; accessible properties: %v", input, accessible),
-			"ask the property owner to grant this credential access to the matching Search Console property",
-		)
-	}
-	return "", NewError(
-		ErrPermissionDenied,
-		fmt.Sprintf("no matching GSC property found for %q; accessible properties: %v", input, accessible),
-		"use list_sites to see accessible properties or ask the property owner to grant this credential access",
-	)
-}
-
-func siteURLMatchesApex(siteURL, apex string) bool {
-	if strings.EqualFold(siteURL, "sc-domain:"+apex) {
-		return true
-	}
-	if !strings.HasPrefix(strings.ToLower(siteURL), "http") {
-		return false
-	}
-	u, err := url.Parse(siteURL)
-	return err == nil && strings.EqualFold(extractApexDomain(u.Host), apex)
-}
-
-// WithResolvedSiteURL wraps a site-scoped API call. It first uses the normalized
-// site URL; if the call returns a 403, it asks ResolveSiteURL to find an
-// accessible property for the same apex (excluding the URL that just failed)
-// and retries exactly once. Any other error, or a 403 that cannot be resolved,
-// is returned unchanged.
-func WithResolvedSiteURL[T any](ctx context.Context, lister SiteLister, siteURL string, call func(ctx context.Context, resolvedSiteURL string) (T, error)) (T, error) {
+// On a property-permission 403 the error lists every accessible property with
+// its permission level, so the caller can choose one explicitly. A 403 about a
+// missing quota project, any other error, or a failed sites.list returns the
+// original error unchanged.
+func WithSiteURL[T any](ctx context.Context, lister SiteLister, siteURL string, call func(ctx context.Context, siteURL string) (T, error)) (T, error) {
 	var zero T
 
-	resolved := NormalizeSiteURL(siteURL)
-	result, err := call(ctx, resolved)
+	normalized := NormalizeSiteURL(siteURL)
+	result, err := call(ctx, normalized)
 	if err == nil {
 		return result, nil
 	}
 
 	var gerr *googleapi.Error
-	if !errors.As(err, &gerr) || gerr.Code != 403 {
+	if !errors.As(err, &gerr) || gerr.Code != 403 || matchesAny(gerr.Message, quotaProjectMarker) {
 		return zero, err
 	}
 
-	retryURL, resolveErr := ResolveSiteURL(ctx, lister, siteURL, resolved)
-	if resolveErr != nil {
-		return zero, resolveErr
+	sites, listErr := lister.ListSites(ctx)
+	if listErr != nil {
+		return zero, err
 	}
-
-	return call(ctx, retryURL)
-}
-
-func extractApexFromInput(input string) string {
-	input = strings.TrimSpace(input)
-	if len(input) >= len("sc-domain:") && strings.EqualFold(input[:len("sc-domain:")], "sc-domain:") {
-		return strings.ToLower(input[len("sc-domain:"):])
+	accessible := make([]string, len(sites.SiteEntry))
+	for i, s := range sites.SiteEntry {
+		accessible[i] = fmt.Sprintf("%s (%s)", s.SiteUrl, s.PermissionLevel)
 	}
-	if strings.Contains(input, "://") {
-		if u, err := url.Parse(input); err == nil {
-			return extractApexDomain(u.Host)
-		}
-	}
-	if idx := strings.Index(input, "/"); idx != -1 {
-		input = input[:idx]
-	}
-	return extractApexDomain(input)
+	return zero, NewError(
+		ErrPermissionDenied,
+		fmt.Sprintf("access to %q was denied; no other property was tried. accessible properties: %v", normalized, accessible),
+		"pick the property for this site from the list (skip any marked siteUnverifiedUser) and pass its site_url verbatim; "+
+			"before a sitemap submit or delete on a property the user did not name, confirm with the user. "+
+			"If the site is not listed, ask the property owner to grant this credential access",
+	)
 }
 
 func extractApexDomain(host string) string {

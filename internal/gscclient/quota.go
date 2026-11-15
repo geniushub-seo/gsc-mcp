@@ -13,20 +13,18 @@ const defaultInspectDailyLimit = 2000
 // DailyQuota is a per-site in-memory daily counter. It never hard-fails; callers
 // may surface a warning when usage approaches the configured limit.
 type DailyQuota struct {
-	mu            sync.Mutex
-	limit         int
-	warnAt        int
-	counts        map[string]int
-	day           string // YYYY-MM-DD in UTC
-	now           func() time.Time
+	mu     sync.Mutex
+	limit  int
+	warnAt int
+	counts map[string]int
+	day    string // YYYY-MM-DD in UTC
+	now    func() time.Time
 }
 
-// NewDailyQuota creates a counter with the given daily limit. A non-positive
-// limit falls back to defaultInspectDailyLimit. Warnings fire at 90% usage.
-func NewDailyQuota(limit int) *DailyQuota {
-	if limit <= 0 {
-		limit = defaultInspectDailyLimit
-	}
+// NewDailyQuota creates a counter against defaultInspectDailyLimit. Warnings
+// fire at 90% usage.
+func NewDailyQuota() *DailyQuota {
+	limit := defaultInspectDailyLimit
 	return &DailyQuota{
 		limit:  limit,
 		warnAt: int(float64(limit) * 0.9),
@@ -56,16 +54,4 @@ func (q *DailyQuota) Inc(siteURL string) (count int, warning string) {
 		)
 	}
 	return count, warning
-}
-
-// Count returns the current day's count for siteURL without incrementing.
-func (q *DailyQuota) Count(siteURL string) int {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	today := q.now().UTC().Format("2006-01-02")
-	if q.day != today {
-		return 0
-	}
-	return q.counts[siteURL]
 }

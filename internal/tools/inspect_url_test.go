@@ -18,7 +18,7 @@ import (
 func TestInspectURL_RejectsBadURLCounts(t *testing.T) {
 	t.Parallel()
 	client := newTestClient(t, "http://unused.example/")
-	quota := gscclient.NewDailyQuota(100)
+	quota := gscclient.NewDailyQuota()
 
 	for _, urls := range [][]string{nil, {}, make([]string, 11)} {
 		urls := urls
@@ -61,7 +61,7 @@ func TestInspectURL_AbsentOptionalSections(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(t, srv.URL+"/")
-	quota := gscclient.NewDailyQuota(100)
+	quota := gscclient.NewDailyQuota()
 	result, _, err := inspectURL(context.Background(), client, quota, inspectURLInput{
 		SiteURL: "sc-domain:example.com",
 		URLs:    []string{"https://example.com/page"},
@@ -131,7 +131,7 @@ func TestInspectURL_BatchCallCountAndInterval(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(t, srv.URL+"/")
-	quota := gscclient.NewDailyQuota(100)
+	quota := gscclient.NewDailyQuota()
 	urls := []string{
 		"https://example.com/a",
 		"https://example.com/b",
@@ -219,7 +219,7 @@ func TestInspectURL_PartialFailuresUseStructuredPerURLFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	result, _, err := inspectURL(context.Background(), newTestClient(t, srv.URL+"/"), gscclient.NewDailyQuota(100), inspectURLInput{
+	result, _, err := inspectURL(context.Background(), newTestClient(t, srv.URL+"/"), gscclient.NewDailyQuota(), inspectURLInput{
 		SiteURL: "sc-domain:example.com",
 		URLs:    []string{"https://example.com/ok", "https://example.com/missing"},
 	}, func(time.Duration) {}, 0)

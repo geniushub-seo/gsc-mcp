@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/geniushub-seo/gsc-mcp/internal/config"
@@ -164,7 +165,12 @@ func TestListSites_MockServer(t *testing.T) {
 	}
 }
 
-func TestGetSite_MockServer_ResolvesURLPrefix(t *testing.T) {
+// TestGetSite_MockServer_403ListsPropertiesWithoutSwitching drives the real
+// tool end to end: a 403 on the normalized property must come back as
+// permission_denied listing the accessible property, and the server must never
+// be asked about any other property.
+func TestGetSite_MockServer_403ListsPropertiesWithoutSwitching(t *testing.T) {
+	var otherPropertyHits atomic.Int32
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		path := r.URL.Path
@@ -176,14 +182,15 @@ func TestGetSite_MockServer_ResolvesURLPrefix(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": 403, "message": "forbidden"}})
 				return
 			}
+			otherPropertyHits.Add(1)
 			_ = json.NewEncoder(w).Encode(map[string]string{
 				"siteUrl":         "https://example.com/",
-				"permissionLevel": "SITE_OWNER",
+				"permissionLevel": "siteOwner",
 			})
 		default:
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"siteEntry": []map[string]string{
-					{"siteUrl": "https://example.com/", "permissionLevel": "SITE_OWNER"},
+					{"siteUrl": "https://example.com/", "permissionLevel": "siteOwner"},
 				},
 			})
 		}
@@ -220,13 +227,18 @@ func TestGetSite_MockServer_ResolvesURLPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("call get_site: %v", err)
 	}
-	if result.IsError {
-		t.Fatalf("get_site returned error: %s", extractTextContent(t, result.Content))
+	if !result.IsError {
+		t.Fatalf("get_site succeeded; a 403 must not be rescued by switching property: %s", extractTextContent(t, result.Content))
+	}
+	if n := otherPropertyHits.Load(); n != 0 {
+		t.Fatalf("server was asked about another property %d time(s)", n)
 	}
 
 	body := extractTextContent(t, result.Content)
-	if !strings.Contains(body, "https://example.com/") {
-		t.Fatalf("expected response to contain resolved URL-prefix, got %q", body)
+	for _, want := range []string{"permission_denied", "https://example.com/ (siteOwner)"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected error to contain %q, got %q", want, body)
+		}
 	}
 }
 

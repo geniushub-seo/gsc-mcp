@@ -211,7 +211,7 @@ func comparePeriods(ctx context.Context, client *gscclient.Client, input compare
 	var rowsA, rowsB []*searchconsole.ApiDataRow
 	var incompleteDateA, incompleteHourA, incompleteDateB, incompleteHourB string
 
-	_, err := gscclient.WithResolvedSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (struct{}, error) {
+	_, err := gscclient.WithSiteURL(ctx, client, normalized.SiteURL, func(ctx context.Context, resolved string) (struct{}, error) {
 		resolvedSiteURL = resolved
 
 		// Both periods are scanned to the API maximum, not to row_limit: every
