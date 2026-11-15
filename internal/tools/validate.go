@@ -69,12 +69,12 @@ var (
 	}
 
 	filterOperatorNames = map[string]string{
-		"equals":          "EQUALS",
-		"notequals":       "NOT_EQUALS",
-		"contains":        "CONTAINS",
-		"notcontains":     "NOT_CONTAINS",
-		"includingregex":  "INCLUDING_REGEX",
-		"excludingregex":  "EXCLUDING_REGEX",
+		"equals":         "EQUALS",
+		"notequals":      "NOT_EQUALS",
+		"contains":       "CONTAINS",
+		"notcontains":    "NOT_CONTAINS",
+		"includingregex": "INCLUDING_REGEX",
+		"excludingregex": "EXCLUDING_REGEX",
 	}
 
 	filterDimensionNames = map[string]string{

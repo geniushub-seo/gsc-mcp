@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/api/searchconsole/v1"
 )
 
@@ -24,26 +24,26 @@ type manageSitemapsInput struct {
 }
 
 type manageSitemapsOutput struct {
-	QueriedAt string         `json:"queried_at"`
-	SiteURL   string         `json:"site_url"`
-	Action    string         `json:"action"`
+	QueriedAt string `json:"queried_at"`
+	SiteURL   string `json:"site_url"`
+	Action    string `json:"action"`
 	// No omitempty: empty list must serialize as [] so callers can tell
 	// "property has no sitemaps" from "field missing / tool broken".
 	Sitemaps []sitemapInfo `json:"sitemaps"`
-	Sitemap   *sitemapInfo   `json:"sitemap,omitempty"`
-	Message   string         `json:"message,omitempty"`
+	Sitemap  *sitemapInfo  `json:"sitemap,omitempty"`
+	Message  string        `json:"message,omitempty"`
 }
 
 type sitemapInfo struct {
-	Path            string                `json:"path"`
-	LastSubmitted   string                `json:"last_submitted,omitempty"`
-	LastDownloaded  string                `json:"last_downloaded,omitempty"`
-	IsPending       bool                  `json:"is_pending"`
-	IsSitemapsIndex bool                  `json:"is_sitemaps_index"`
-	Type            string                `json:"type,omitempty"`
-	Warnings        int64                 `json:"warnings"`
-	Errors          int64                 `json:"errors"`
-	Contents        []sitemapContentInfo  `json:"contents,omitempty"`
+	Path            string               `json:"path"`
+	LastSubmitted   string               `json:"last_submitted,omitempty"`
+	LastDownloaded  string               `json:"last_downloaded,omitempty"`
+	IsPending       bool                 `json:"is_pending"`
+	IsSitemapsIndex bool                 `json:"is_sitemaps_index"`
+	Type            string               `json:"type,omitempty"`
+	Warnings        int64                `json:"warnings"`
+	Errors          int64                `json:"errors"`
+	Contents        []sitemapContentInfo `json:"contents,omitempty"`
 }
 
 type sitemapContentInfo struct {
@@ -54,7 +54,7 @@ type sitemapContentInfo struct {
 func registerManageSitemaps(srv *mcp.Server, client *gscclient.Client, flags WriteFlags) {
 	mcp.AddTool(srv,
 		&mcp.Tool{
-			Name: "manage_sitemaps",
+			Name:        "manage_sitemaps",
 			Description: descManageSitemaps,
 		},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input manageSitemapsInput) (*mcp.CallToolResult, any, error) {

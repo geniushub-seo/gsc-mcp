@@ -1,9 +1,9 @@
 package tools
 
 import (
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/geniushub-seo/gsc-mcp/internal/gscclient"
 	"github.com/geniushub-seo/gsc-mcp/internal/mcpfix"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Register adds all GSC tools to the MCP server and installs compatibility
