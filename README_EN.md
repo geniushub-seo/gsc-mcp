@@ -19,7 +19,7 @@
 
 </div>
 
-Built for SEO and content teams. Sign in once with your own Google account (ADC), and your local agent — Claude Code, Codex, Cursor, or Hermes — can query the Search Console data you already have access to. You do **not** need to add a service account to every property.
+Built for SEO and content teams. Sign in once with your own Google account (ADC), and your local agent — Claude Code, Codex, or Cursor — can query the Search Console data you already have access to. You do **not** need to add a service account to every property.
 
 ## Install
 
@@ -271,7 +271,6 @@ Clone the repo when you want an agent to get its own project configuration and g
 | Claude Code | `.mcp.json`, `.claude-plugin/`, `.agents/skills/` | Open the repo or install the plugin. |
 | Codex | `AGENTS.md`, `.agents/skills/`; MCP config is separate | Run `codex mcp add` below, then restart Codex or start a new session. |
 | Cursor | `.cursor/mcp.json`, `.cursor/rules/gsc-mcp.mdc` | Open the repo as a project. |
-| Hermes | [`.hermes/`](.hermes/) onboarding bundle | Run `bash .hermes/setup.sh`, then start a new Hermes session. |
 
 For every client, the assisting agent runs `gsc-mcp doctor`, then calls
 `list_sites`. Never put an OAuth token or service-account key in these files.

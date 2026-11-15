@@ -1,9 +1,9 @@
 # 安裝 prompt（直接貼給 agent）
 
-給完全沒經驗的使用者用。複製下方程式碼區塊的全部內容，貼給 Claude Code、Codex、
-Hermes 或任何能執行終端機指令的 agent。
+給完全沒經驗的使用者用。複製下方程式碼區塊的全部內容，貼給 Claude Code、Codex
+或任何能執行終端機指令的 agent。
 
-三個修正來源（2026-08-20，hermes session `20260820_121815_5ccfef` 實測）：
+三個修正來源（2026-08-20 實測）：
 
 - macOS 沒有 homebrew 時**不要嘗試安裝 homebrew**，它要求本機管理員權限
 - gcloud 需要 Python 3.10+，macOS 內建 3.9.6 不夠，`install.sh` 自己也跑不起來

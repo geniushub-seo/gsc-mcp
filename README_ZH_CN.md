@@ -19,7 +19,7 @@
 
 </div>
 
-为 SEO 与内容团队设计：用你自己的 Google 账号登录（ADC），本地 agent（Claude Code / Codex / Cursor / Hermes）就能查询你本来就有权限的 Search Console 数据——**不必**为每个资源（property）单独添加 service account。
+为 SEO 与内容团队设计：用你自己的 Google 账号登录（ADC），本地 agent（Claude Code / Codex / Cursor）就能查询你本来就有权限的 Search Console 数据——**不必**为每个资源（property）单独添加 service account。
 
 ## 一行安装
 
@@ -209,7 +209,6 @@ chmod 600 ~/.config/gsc-mcp/service-account.json
 | Claude Code | `.mcp.json`、`.claude-plugin/`、`.agents/skills/` | 打开 repo 或安装 plugin。 |
 | Codex | `AGENTS.md`、`.agents/skills/` | 从 repo 根目录启动 Codex。 |
 | Cursor | `.cursor/mcp.json`、`.cursor/rules/gsc-mcp.mdc` | 将 repo 当作项目打开。 |
-| Hermes | [`.hermes/`](.hermes/) 上手工具 | 让 Hermes 按 `.hermes/ONESHOT.md` 安装；所有终端操作由 Hermes 执行，成功后开启新的 session。 |
 
 所有 client 的共同验收：先运行 `gsc-mcp doctor`，再让 agent 调用 `list_sites`。不要把 OAuth token 或 service-account key 放进这些文件。
 

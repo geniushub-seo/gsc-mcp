@@ -273,7 +273,6 @@ recognizes. Do not duplicate these instructions or add credentials to the repo.
 | Claude Code | `.mcp.json`, `.claude-plugin/`, and the plugin's `.agents/skills/` |
 | Codex | This root `AGENTS.md` and `.agents/skills/`; MCP itself must be added through Codex `config.toml` or `codex mcp add` |
 | Cursor | `.cursor/mcp.json` and `.cursor/rules/gsc-mcp.mdc` |
-| Hermes | Run `bash .hermes/setup.sh`; it uses `hermes mcp add/test` to update the active profile, then requires a new session |
 
 For any agent, the first real query should be `list_sites` when the property is
 not unambiguous. Never guess a property or read or print credentials.

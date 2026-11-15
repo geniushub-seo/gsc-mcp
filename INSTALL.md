@@ -63,7 +63,7 @@ gsc-mcp setup
 
 ## Step 0: ask first
 
-1. Which AI client will they use? Claude Desktop, Claude Code, Codex, Cursor, Hermes, or VS Code?
+1. Which AI client will they use? Claude Desktop, Claude Code, Codex, Cursor, or VS Code?
 2. Is gcloud installed? Check with `which gcloud`.
 3. Does ADC already exist? Check without reading its contents. If it does not,
    the agent starts `gcloud auth application-default login` itself.
@@ -321,33 +321,6 @@ When this repository is opened, Cursor reads `.cursor/mcp.json`; no separate con
 ### Codex
 
 When this repository is opened, Codex reads root `AGENTS.md` and `.agents/skills/`. Add the same `gsc` MCP server using Codex MCP configuration. Do not put credentials in the repository's `.codex/` directory.
-
-### Hermes
-
-Hermes keeps MCP configuration in the active profile returned by
-`hermes config path`; it does not auto-load a repository `.hermes/` config.
-This repository provides an onboarding bundle that uses the Hermes CLI to
-preserve existing settings, add `gsc`, and test all six tools:
-
-```bash
-bash .hermes/setup.sh
-```
-
-Then start a new Hermes session and call `list_sites`. See
-[.hermes/README.md](.hermes/README.md) for the completion evidence and recovery
-steps.
-
-For a manual merge, **merge**, do not replace, this entry under `mcp_servers`
-in the file printed by `hermes config path`:
-
-```yaml
-mcp_servers:
-  gsc:
-    command: gsc-mcp
-    supports_parallel_tool_calls: false
-```
-
-ADC needs no `env` block. Restart Hermes, then first ask it to call `list_sites`.
 
 ### VS Code and Copilot
 
