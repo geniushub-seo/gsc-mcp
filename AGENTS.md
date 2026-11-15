@@ -180,9 +180,10 @@ The server normalizes input; do not ask the user to pre-format it.
 | `https://example.com/` | `https://example.com/` — trailing slash explicitly means URL-prefix. |
 | `https://example.com/blog` | `https://example.com/blog/` |
 
-If a guessed property receives 403, the server calls `sites.list`, finds a
-matching property, and retries once. If none is usable, its error lists every
-accessible property; show that list to the user rather than guessing.
+The server queries only that one normalized property and never switches to
+another. If it receives 403 it returns `permission_denied`, and the error lists
+every accessible property with its permission level; show that list to the user
+and let them choose rather than guessing.
 
 ### Four output traps
 

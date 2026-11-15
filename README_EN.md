@@ -353,7 +353,7 @@ Those three return facts and arithmetic, never advice. The reading rules live in
 - If you group or filter by `page`, `aggregationType` cannot be `BY_PROPERTY`.
 - Average position is a weighted average, not the factual answer to "what position does this keyword rank at".
 
-`site_url` accepts a bare domain (`example.com`), a full URL, or the canonical `sc-domain:` form — the server normalizes it. If the guess is wrong and Google returns 403, it looks up your accessible properties and retries once.
+`site_url` accepts a bare domain (`example.com`), a full URL, or the canonical `sc-domain:` form — the server normalizes it. It only ever queries that one normalized property and never switches to another. On 403 it returns `permission_denied` and lists your accessible properties with their permission levels, so you choose.
 
 ## Development
 

@@ -272,7 +272,7 @@ Claude Code plugin 與 Codex 都會讀取共用的 `.agents/skills/`。Cursor �
 - 若 group 或 filter 了 `page`，`aggregationType` 不能用 `BY_PROPERTY`。
 - 平均排名是加權平均，不是「這個字排第幾名」的事實。
 
-`site_url` 可以直接給裸網域（`example.com`）、完整 URL 或標準 `sc-domain:` 格式，server 會正規化；猜錯導致 403 時會自動查詢可存取的 property 重試一次。
+`site_url` 可以直接給裸網域（`example.com`）、完整 URL 或標準 `sc-domain:` 格式，server 會正規化；只會打正規化後的那一個 property，不會自動改打別的；403 時回 `permission_denied`，並列出你可存取的 property 與權限等級，由你自己挑。
 
 ## 開發
 

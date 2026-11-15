@@ -272,7 +272,7 @@ Claude Code plugin 与 Codex 都会读取共用的 `.agents/skills/`。Cursor �
 - 如果按 `page` 分组或过滤，`aggregationType` 就不能用 `BY_PROPERTY`。
 - 平均排名是加权平均值，不等于「这个关键词排在第几位」这个事实。
 
-`site_url` 可以直接给裸域名（`example.com`）、完整 URL 或标准的 `sc-domain:` 格式，server 会做规范化；如果猜错导致 403，它会查询你有权限的资源列表并重试一次。
+`site_url` 可以直接给裸域名（`example.com`）、完整 URL 或标准的 `sc-domain:` 格式，server 会做规范化；它只会请求规范化后的那一个资源，不会自动改查别的；遇到 403 时返回 `permission_denied`，并列出你可访问的资源及权限等级，由你自己选择。
 
 ## 开发
 
