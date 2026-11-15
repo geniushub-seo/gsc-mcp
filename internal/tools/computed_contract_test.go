@@ -233,7 +233,7 @@ func TestContract_FindCTRGaps_FinalSkipsFreshnessProbe(t *testing.T) {
 	t.Parallel()
 
 	queryPage := computedFixture(t, "searchanalytics_query_page.json")
-	srv, seen := analyticsRouter(t, func(req searchconsole.SearchAnalyticsQueryRequest) []byte {
+	srv, seen := analyticsRouter(t, func(_ searchconsole.SearchAnalyticsQueryRequest) []byte {
 		return queryPage
 	})
 
