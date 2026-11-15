@@ -285,6 +285,9 @@ go test ./... && go vet ./... && golangci-lint run
 
 - [INSTALL.md](INSTALL.md) — 写给 AI agent 照着执行的安装指引
 - [SPEC.md](SPEC.md) — 定稿的技术规格
+- [CHANGELOG.md](CHANGELOG.md) — 各版本更新记录
+- [CONTRIBUTING.md](CONTRIBUTING.md) — 参与贡献
+- [SECURITY.md](SECURITY.md) — 报告安全问题
 
 ---
 

@@ -366,6 +366,9 @@ go test ./... && go vet ./... && golangci-lint run
 
 - [INSTALL.md](INSTALL.md) — installation guide written for an AI agent to follow
 - [SPEC.md](SPEC.md) — the frozen technical spec
+- [CHANGELOG.md](CHANGELOG.md) — release notes for each version
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
+- [SECURITY.md](SECURITY.md) — reporting a security issue
 
 ---
 
